@@ -11,7 +11,7 @@ import time
 import math
 import torch.optim as optim
 import pandas as pd
-from model import *
+from model_AE import *
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '7'
 
@@ -394,7 +394,7 @@ def standardization(data):
 
 
 if __name__ == '__main__':
-    model = torch.load('model/2-CD3E_rnafm-250_loss1_loss2_015-085.model')
+    model = torch.load('model/2-ex-apt-MLP.model')
     model.eval()
     model = model.to(device)
 

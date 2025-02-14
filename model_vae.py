@@ -33,7 +33,7 @@ class ScaledDotProductAttention(nn.Module):
 
     def forward(self, Q, K, V, attn_mask):
         scores = torch.matmul(Q, K.transpose(-1, -2)) / np.sqrt(self.d_k)
-        scores.masked_fill_(attn_mask, -1e9)
+        scores.masked_fill_(attn_mask.to(torch.bool), -1e9)
 
         attn = nn.Softmax(dim=-1)(scores)
         context = torch.matmul(attn, V)
@@ -196,9 +196,9 @@ class DecoderVAE(nn.Module):
         return dec_outputs, dec_self_attentions, dec_enc_attentions
 
 
-class FullVAEModel(nn.Module):
+class Full_VAE_Model(nn.Module):
     def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, latent_dim, dropout):
-        super(FullVAEModel, self).__init__()
+        super(Full_VAE_Model, self).__init__()
         self.encoder = EncoderVAE(input_dim=input_dim,
                                   model_dim=model_dim,
                                   latent_dim=latent_dim,

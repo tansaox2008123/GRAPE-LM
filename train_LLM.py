@@ -7,7 +7,7 @@ import torch.utils.data as torch_data
 from torch.utils.data import Dataset, DataLoader
 import torchmetrics
 import time
-from model_LLM import *
+from model_AE import *
 import sys
 
 sys.path.append(os.path.abspath(''))
@@ -156,7 +156,7 @@ def read_data(file_path, is_batch=False):
         true_seqs1 = torch.tensor(np.asarray(true_seqs))
         bd_scores1 = torch.tensor(np.asarray(bd_scores))
     else:
-        rnas1 = torch.tensor(rnas).to(device)  # .to(torch.long)
+        rnas1 = torch.tensor(rnas).to(device)
         input_seqs1 = torch.tensor(np.asarray(input_seqs)).to(device)
         true_seqs1 = torch.tensor(np.asarray(true_seqs)).to(device)
         bd_scores1 = torch.tensor(np.asarray(bd_scores)).to(device)
@@ -174,6 +174,33 @@ class Myloss(nn.Module):
         _loss = F.binary_cross_entropy(pred_scores, true_labels, reduction='none')
         loss = torch.mean(_loss * mask)
         return loss
+
+# def rna_seq_embbding(OriginSeq):
+#     torch.cuda.empty_cache()
+#
+#     # Load RNA-FM model
+#     EmbbingModel, alphabet = fm.pretrained.rna_fm_t12()
+#     batch_converter = alphabet.get_batch_converter()
+#     EmbbingModel.to(device)
+#     EmbbingModel.eval()  # disables dropout for deterministic results
+#
+#     batch_labels, batch_strs, batch_tokens = batch_converter(OriginSeq)
+#     dataloader = DataLoader(batch_tokens, batch_size=64)
+#
+#     tmp = []
+#     for batch in dataloader:
+#         with torch.no_grad():
+#             torch.cuda.empty_cache()
+#             results = EmbbingModel(batch.to(device), repr_layers=[12])
+#             tmp.append(results["representations"][12])
+#     token_embeddings = torch.cat(tmp, dim=0)
+#     token_embeddings_cpu = token_embeddings.to("cpu")
+#     # print("RNA Embbding Completed")
+#     # print(f"memory_allocated： {torch.cuda.memory_allocated()/1024/1024/1024} GB")
+#     # print(f"memory_reserved： {torch.cuda.memory_reserved()/1024/1024/1024} GB")
+#     # return token_embeddings
+#     return token_embeddings_cpu
+
 
 
 if __name__ == '__main__':
@@ -212,12 +239,12 @@ if __name__ == '__main__':
 
     model = model.to(device)
 
-    loss_func1 = nn.MSELoss()  # nn.BCEWithLogitsLoss()#
+    loss_func1 = nn.MSELoss()
     loss_func2 = nn.CrossEntropyLoss(ignore_index=0)
 
     w = 0
 
-    model_name = '2-CD3E_rnafm-250_loss1_loss2_000-100'
+    model_name = '2-CD3E_rnafm-250_loss1_loss2_000-100_2'
     fw = open('log/' + model_name + '_training_log.txt', 'w')
     """分批次训练"""
     for epoch in range(250):
@@ -282,7 +309,7 @@ if __name__ == '__main__':
             true_seqs = true_seqs.to(device)
             labels = labels.to(device)
 
-            bind_socres, pred_seqs = model(inputs, input_seqs)  # model(inputs)#
+            bind_socres, pred_seqs = model(inputs, input_seqs)
             pred_seqs = torch.softmax(pred_seqs, -1)
             labels = labels.float().view(-1, 1)
 

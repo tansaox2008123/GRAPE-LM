@@ -230,31 +230,9 @@ class FullModel(nn.Module):
         self.generator = Generator(model_dim, vocab=tgt_size)
 
     def forward(self, rna_emds, rna_seq):
-        hidd_feats = self.encoder(rna_emds)  # [batch_size, model_dim]
-        bind_scores = self.predictor(hidd_feats)  # [batch_size, 1]
-        dec_outputs, _, _ = self.decoder(rna_seq, hidd_feats)
-        pred_seq = self.generator(dec_outputs)
-
-        return bind_scores, pred_seq
-
-
-class SimpleModel(nn.Module):
-    def __init__(self, input_dim, model_dim, dropout):
-        super(SimpleModel, self).__init__()
-        self.encoder = Encoder(embed_dim=input_dim,
-                               model_dim=model_dim,
-                               dropout=dropout)
-
-        self.predictor = Predictor(hidd_feat_dim=model_dim,
-                                   model_dim=model_dim,
-                                   dropout=dropout)
-
-        self.decoder = SimpleDecoder(hidd_feat_dim=model_dim,
-                                     model_dim=model_dim)
-
-    def forward(self, rna_emds):
         hidd_feats = self.encoder(rna_emds)
         bind_scores = self.predictor(hidd_feats)
-        pred_seq = self.decoder(hidd_feats)
+        dec_outputs, _, _ = self.decoder(rna_seq, hidd_feats)
+        pred_seq = self.generator(dec_outputs)
 
         return bind_scores, pred_seq
