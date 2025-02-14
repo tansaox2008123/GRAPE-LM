@@ -14,6 +14,9 @@ import time
 import fm
 from model_CAE import *
 import sys
+import argparse
+
+
 
 sys.path.append(os.path.abspath(''))
 
@@ -247,7 +250,8 @@ class Myloss(nn.Module):
         return loss
 
 
-if __name__ == '__main__':
+
+def train_CAE():
     # 设置随机数种子
     # setup_seed(123)
     train_file = '/home2/public/data/RNA_aptamer/All_data/round1-sample1-ex-apt/train_wo_representation_seq.txt'
@@ -274,13 +278,13 @@ if __name__ == '__main__':
                              drop_last=False)
 
     model = Full_CAE_Model(input_dim=12800,  # 输入特征的维度
-                      model_dim=640,  # LLM适配器（Encoder）隐含层的大小, Transformer模型维度
-                      tgt_size=5,  # 碱基种类数
-                      n_declayers=2,  # Transformer解码器层数
-                      d_ff=128,  # Transformer前馈网络隐含层维度
-                      d_k_v=64,
-                      n_heads=2,  # Transformer注意力头数
-                      dropout=0.05)
+                           model_dim=640,  # LLM适配器（Encoder）隐含层的大小, Transformer模型维度
+                           tgt_size=5,  # 碱基种类数
+                           n_declayers=2,  # Transformer解码器层数
+                           d_ff=128,  # Transformer前馈网络隐含层维度
+                           d_k_v=64,
+                           n_heads=2,  # Transformer注意力头数
+                           dropout=0.05)
     #
     # model = SimpleModel(input_dim=640,
     #                     model_dim=128,
@@ -395,3 +399,21 @@ if __name__ == '__main__':
               )
     """全部数据训练"""
     torch.save(model, 'model/' + model_name + '.model')
+
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Choose which function to run.")
+    parser.add_argument('function', choices=['1', '2', '3'], help="Function to run")
+    parser.add_argument('--cuda', type=str, default="0", help="CUDA device ID (e.g., '0', '1', '2')")
+
+    args = parser.parse_args()
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda
+
+    # 根据参数选择函数
+    if args.function == '1':
+        train_CAE()
+
+
+if __name__ == '__main__':
+   main()
