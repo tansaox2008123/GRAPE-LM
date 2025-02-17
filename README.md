@@ -17,3 +17,13 @@ And we need another environment with RNA-FM to get the RNA embedding to training
 https://github.com/ml4bio/RNA-FM, and follow the details to get the RNA-fm environment.
 
 ## Quickstart
+Train your own model should follow this code
+```bash
+   python train_AE.py  1 --cuda 0 --train_file <your_train_file.txt> --test_file <your_test_file.txt> --batch_size 1000
+```
+Numbers 1, 2, and 3 represent training the model using RNA-FM, EVO, and without using an LLM model, respectively.
+
+generation RNA aptamers should follow this code
+```bash
+   python generation.py 1 --cuda 0 --input_file <your_sample_aptamers.txt> --output_file <>
+```
