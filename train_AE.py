@@ -262,11 +262,7 @@ def get_data_wollm(file_path, is_batch=False):
     return rnas1, input_seqs1, true_seqs1, bd_scores1
 
 
-def train_AE_LLM_rna_fm():
-    train_file = '/home2/public/data/RNA_aptamer/All_data/round1-sample1-ex-apt/train_wo_representation_seq.txt'
-    test_file = '/home2/public/data/RNA_aptamer/All_data/round1-sample1-ex-apt/test_wo_representation_seq.txt'
-    batch_size = 10
-
+def train_AE_LLM_rna_fm(train_file, test_file, batch_size):
     tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores = get_data_rna_fm(train_file, is_batch=True)
     te_feats, te_input_seqs, te_true_seqs, te_bd_scores = get_data_rna_fm(test_file, is_batch=True)
 
@@ -407,11 +403,7 @@ def train_AE_LLM_rna_fm():
     torch.save(model, 'model/' + model_name + '.model')
 
 
-def train_AE_LLM_Evo():
-    train_file = '/home2/public/data/RNA_aptamer/All_data/round1-sample1-ex-apt/train_wo_representation_seq.txt'
-    test_file = '/home2/public/data/RNA_aptamer/All_data/round1-sample1-ex-apt/test_wo_representation_seq.txt'
-    batch_size = 5000
-
+def train_AE_LLM_Evo(train_file, test_file, batch_size):
     tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores = get_data_evo(train_file, is_batch=True)
     te_feats, te_input_seqs, te_true_seqs, te_bd_scores = get_data_evo(test_file, is_batch=True)
 
@@ -552,11 +544,7 @@ def train_AE_LLM_Evo():
     torch.save(model, 'model/' + model_name + '.model')
 
 
-def train_AE_woLLM():
-    train_file = '/home2/public/data/RNA_aptamer/All_data/round1-sample1-ex-apt/train_wo_representation_seq.txt'
-    test_file = '/home2/public/data/RNA_aptamer/All_data/round1-sample1-ex-apt/test_wo_representation_seq.txt'
-    batch_size = 5000
-
+def train_AE_woLLM(train_file, test_file, batch_size):
     tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores = get_data_wollm(train_file, is_batch=True)
     te_feats, te_input_seqs, te_true_seqs, te_bd_scores = get_data_wollm(test_file, is_batch=True)
 
@@ -699,17 +687,24 @@ def main():
     parser = argparse.ArgumentParser(description="Choose which function to run.")
     parser.add_argument('function', choices=['1', '2', '3'], help="Function to run")
     parser.add_argument('--cuda', type=str, default="0", help="CUDA device ID (e.g., '0', '1', '2')")
+    parser.add_argument('--train_file', type=str)
+    parser.add_argument('--test_file', type=str)
+    parser.add_argument('--batch_size', type=int, default="1000")
+
 
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda
+    train_file = args.train_file
+    test_file = args.test_file
+    batch_size = args.batch_size
 
     # 根据参数选择函数
     if args.function == '1':
-        train_AE_LLM_rna_fm()
+        train_AE_LLM_rna_fm(train_file, test_file, batch_size)
     elif args.function == '2':
-        train_AE_LLM_Evo()
+        train_AE_LLM_Evo(train_file, test_file, batch_size)
     elif args.function == '3':
-        train_AE_woLLM()
+        train_AE_woLLM(train_file, test_file, batch_size)
 
 
 if __name__ == '__main__':

@@ -160,11 +160,7 @@ class Myloss(nn.Module):
 
 
 
-def train_CAE():
-    train_file = '/home2/public/data/RNA_aptamer/All_data/round1-sample1-ex-apt/train_wo_representation_seq.txt'
-    test_file = '/home2/public/data/RNA_aptamer/All_data/round1-sample1-ex-apt/test_wo_representation_seq.txt'
-    batch_size = 5000
-
+def train_CAE(train_file, test_file, batch_size):
     tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores = read_data(train_file, is_batch=True)
     te_feats, te_input_seqs, te_true_seqs, te_bd_scores = read_data(test_file, is_batch=True)
 
@@ -304,12 +300,19 @@ def main():
     parser = argparse.ArgumentParser(description="Choose which function to run.")
     parser.add_argument('function', choices=['1', '2', '3'], help="Function to run")
     parser.add_argument('--cuda', type=str, default="0", help="CUDA device ID (e.g., '0', '1', '2')")
+    parser.add_argument('--train_file', type=str)
+    parser.add_argument('--test_file', type=str)
+    parser.add_argument('--batch_size', type=int, default="1000")
+
 
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda
+    train_file = args.train_file
+    test_file = args.test_file
+    batch_size = args.batch_size
 
     if args.function == '1':
-        train_CAE()
+        train_CAE(train_file, test_file, batch_size)
 
 
 if __name__ == '__main__':
