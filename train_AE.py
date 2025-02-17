@@ -24,9 +24,6 @@ else:
     device = torch.device("cpu")
 
 
-# os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-
-
 def sigmoid(x, k=0.05):
     return 1 / (1 + np.exp(-k * x))
 
@@ -38,20 +35,16 @@ def standardization(data):
 
 
 def convert_to_rna_sequence_rna_fm(data):
-    # 创建映射字典
     rna_to_num = {'A': 1, 'C': 2, 'G': 3, 'U': 4}
 
-    # 将RNA序列转换为数字
     numbers = [rna_to_num.get(base, -1) for base in data.upper()]
 
     return numbers
 
 
 def convert_to_rna_sequence_evo(data):
-    # 创建映射字典
     mapping = {1: 'A', 2: 'C', 3: 'G', 4: 'U'}
 
-    # 转换为 RNA 序列
     rna_sequence = ''.join([mapping[number] for number in data])
 
     return rna_sequence
@@ -70,22 +63,14 @@ def read_data_rna_fm(file_path, EmbbingModel, batch_converter):
         words = line.split()
         b = words[-1]
 
-        # values_list = ast.literal_eval(b)
-
         rna_one_hot = convert_to_rna_sequence_rna_fm(b)
 
         values_list = list(rna_one_hot)
 
         values_list.insert(0, 0)
-        # print(values_list)
 
         input_seq = values_list[:-1]
         true_seq = values_list[1:]
-
-        # true_rna = convert_to_rna_sequence_rna_fm(true_seq)
-        # input_seq = torch.tensor(input_seq)
-        # true_seq = torch.tensor(true_seq)
-
         decimal_part = float(words[0])
         decimal_part = (sigmoid(decimal_part, 0.05) - 0.5) * 2.0
 
@@ -99,14 +84,9 @@ def read_data_rna_fm(file_path, EmbbingModel, batch_converter):
         rna_fm = rna_seq_embbding(all_rna, batch_converter, EmbbingModel)
         rna_fm = rna_fm[1:-1, :]
         rna_fm = rna_fm.cpu().numpy()
-        # 展开FM表征
+
         rna_fm = rna_fm.reshape(-1)
         rna_fm = standardization(rna_fm)
-        # print(rna_fm.shape)
-        # 平均FM表征
-        # rna_fm = rna_fm.squeeze(0)
-        # rna_fm = np.mean(rna_fm, axis=0)
-        # rna_fm = standardization(rna_fm)
 
         rnas.append(rna_fm)
         input_seqs.append(input_seq)
@@ -116,14 +96,12 @@ def read_data_rna_fm(file_path, EmbbingModel, batch_converter):
 
 
 def get_data_rna_fm(file_path, is_batch=False):
-    # rnas, input_seqs, true_seqs, bd_scores = multiprocess_read_line_2.get_data(file_path)
 
     EmbbingModel, batch_converter = get_rna_fm_model()
 
     rnas, input_seqs, true_seqs, bd_scores = read_data_rna_fm(file_path, EmbbingModel, batch_converter)
 
     if is_batch:
-        # rnas1 = torch.tensor(rnas, dtype=torch.float32)
         rnas1 = torch.tensor(rnas)
         input_seqs1 = torch.tensor(np.asarray(input_seqs))
         true_seqs1 = torch.tensor(np.asarray(true_seqs))
@@ -196,7 +174,6 @@ def get_data_evo(file_path, is_batch=False):
     rnas, input_seqs, true_seqs, bd_scores = read_data_evo(file_path, model, tokenizer)
 
     if is_batch:
-        # rnas1 = torch.tensor(rnas, dtype=torch.float32)
         rnas1 = torch.tensor(rnas)
         input_seqs1 = torch.tensor(np.asarray(input_seqs))
         true_seqs1 = torch.tensor(np.asarray(true_seqs))
@@ -213,46 +190,25 @@ def get_data_evo(file_path, is_batch=False):
 def get_rna_fm_model():
     torch.cuda.empty_cache()
 
-    # Load RNA-FM model
     EmbbingModel, alphabet = fm.pretrained.rna_fm_t12()
     batch_converter = alphabet.get_batch_converter()
     EmbbingModel.to(device)
-    EmbbingModel.eval()  # disables dropout for deterministic results
+    EmbbingModel.eval()
 
     return EmbbingModel, batch_converter
 
 
 def rna_seq_embbding(OriginSeq, batch_converter, EmbeddingModel):
-    # torch.cuda.empty_cache()
-    #
-    # # Load RNA-FM model
-    # EmbbingModel, alphabet = fm.pretrained.rna_fm_t12()
-    # batch_converter = alphabet.get_batch_converter()
-    # EmbbingModel.to(device)
-    # EmbbingModel.eval()  # disables dropout for deterministic results
-
     EmbeddingModel = EmbeddingModel.to(device)
     batch_labels, batch_strs, batch_tokens = batch_converter(OriginSeq)
     batch_tokens = batch_tokens.to(device)
-    # dataloader = DataLoader(batch_tokens, batch_size=64)
 
     tmp = []
-    # for batch in dataloader:
-    #     with torch.no_grad():
-    #         torch.cuda.empty_cache()
-    #         results = EmbbingModel(batch.to(device), repr_layers=[12])
-    #         tmp.append(results["representations"][12])
-    # token_embeddings = torch.cat(tmp, dim=0)
-    # token_embeddings_cpu = token_embeddings.to("cpu")
 
     with torch.no_grad():
         results = EmbeddingModel(batch_tokens, repr_layers=[12])
     token_embeddings = results["representations"][12][0]
 
-    # print("RNA Embbding Completed")
-    # print(f"memory_allocated： {torch.cuda.memory_allocated()/1024/1024/1024} GB")
-    # print(f"memory_reserved： {torch.cuda.memory_reserved()/1024/1024/1024} GB")
-    # return token_embeddings
     return token_embeddings
 
 
@@ -268,44 +224,19 @@ def read_data_wollm(file_path):
     for line in lines:
         words = line.split()
         b = words[-1]
-        # print(b)
-        # a = words[-1]
-        # 获取匹配到的部分
-        # 将字符串表示的列表转换为实际的列表
-
-        # values_list = ast.literal_eval(b)
-
         rna_one_hot = convert_to_rna_sequence_rna_fm(b)
-        # print(rna_one_hot)
 
         values_list = list(rna_one_hot)
 
         values_list.insert(0, 0)
-        # print(values_list)
 
         input_seq = values_list[:-1]
         true_seq = values_list[1:]
 
-        # input_seq = torch.tensor(input_seq)
-        # true_seq = torch.tensor(true_seq)
-
         decimal_part = float(words[0])
         decimal_part = (sigmoid(decimal_part, 0.05) - 0.5) * 2.0
 
-        # 不使用rna_fm直接使用one-hot编码
         rna_fm = values_list[1:]
-
-        # rna-fm的表征
-        # rna_fm = np.load(words[0])
-
-        # 展开FM表征
-        # rna_fm = rna_fm.reshape(-1)
-        # rna_fm = standardization(rna_fm)
-
-        # 平均FM表征
-        # rna_fm = rna_fm.squeeze(0)
-        # rna_fm = np.mean(rna_fm, axis=0)
-        # rna_fm = standardization(rna_fm)
 
         rnas.append(rna_fm)
         input_seqs.append(input_seq)
@@ -319,7 +250,6 @@ def get_data_wollm(file_path, is_batch=False):
 
     if is_batch:
         rnas1 = torch.tensor(rnas, dtype=torch.float32)
-        # rnas1 = torch.tensor(rnas)
         input_seqs1 = torch.tensor(np.asarray(input_seqs))
         true_seqs1 = torch.tensor(np.asarray(true_seqs))
         bd_scores1 = torch.tensor(np.asarray(bd_scores))

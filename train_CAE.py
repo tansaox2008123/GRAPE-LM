@@ -39,107 +39,35 @@ def stable_sigmoid(x):
         return sig
 
 
-class NewDataset(Dataset):
-    def __init__(self, file_path):
-        super(NewDataset, self).__init__()
-        fh = open(file_path, 'r')
-        rnas = []
-        input_seqs = []
-        true_seqs = []
-        bd_scores = []
-        # 按照传入的路径和txt文本参数，以只读的方式打开这个文本
-        for line in fh:
-            words = line.split()
-            b = words[1:]
-            a = ''.join(b)
-            match = re.search(r'\[.*\]', a)
-            if match:
-                # 获取匹配到的部分
-                substring = match.group(0)
-                # 将字符串表示的列表转换为实际的列表
-                values_list = ast.literal_eval(substring)
-                # 将列表转换为张量
-                values_list.insert(0, 0)
-
-                input_seq = values_list[:-1]
-                true_seq = values_list[1:]
-
-                label = stable_sigmoid(math.log(float(words[-1])) - 7.5)
-
-                rna_fm = np.load(words[0])
-                rna_fm = np.mean(rna_fm, axis=0)
-
-                rna_fm = torch.tensor(rna_fm)
-                input_seq = torch.tensor(input_seq)
-                true_seq = torch.tensor(true_seq)
-                label = torch.tensor(label)
-
-                rnas.append((rna_fm, input_seq, true_seq, label))
-            else:
-                pass
-        self.rnas = rnas
-
-    def __len__(self):
-        return len(self.rnas)
-
-    def __getitem__(self, index):
-        rna_fm, input_seq, true_seq, label = self.rnas[index]
-
-        return rna_fm, input_seq, true_seq, label
-
-
 def convert_to_rna_sequence_rna_fm(data):
-    # 创建映射字典
     rna_to_num = {'A': 1, 'C': 2, 'G': 3, 'U': 4}
 
-    # 将RNA序列转换为数字
     numbers = [rna_to_num.get(base, -1) for base in data.upper()]
 
     return numbers
 
 
 def rna_seq_embbding(OriginSeq, batch_converter, EmbeddingModel):
-    # torch.cuda.empty_cache()
-    #
-    # # Load RNA-FM model
-    # EmbbingModel, alphabet = fm.pretrained.rna_fm_t12()
-    # batch_converter = alphabet.get_batch_converter()
-    # EmbbingModel.to(device)
-    # EmbbingModel.eval()  # disables dropout for deterministic results
-
     EmbeddingModel = EmbeddingModel.to(device)
     batch_labels, batch_strs, batch_tokens = batch_converter(OriginSeq)
     batch_tokens = batch_tokens.to(device)
-    # dataloader = DataLoader(batch_tokens, batch_size=64)
 
     tmp = []
-    # for batch in dataloader:
-    #     with torch.no_grad():
-    #         torch.cuda.empty_cache()
-    #         results = EmbbingModel(batch.to(device), repr_layers=[12])
-    #         tmp.append(results["representations"][12])
-    # token_embeddings = torch.cat(tmp, dim=0)
-    # token_embeddings_cpu = token_embeddings.to("cpu")
 
     with torch.no_grad():
         results = EmbeddingModel(batch_tokens, repr_layers=[12])
     token_embeddings = results["representations"][12][0]
 
-    # print("RNA Embbding Completed")
-    # print(f"memory_allocated： {torch.cuda.memory_allocated()/1024/1024/1024} GB")
-    # print(f"memory_reserved： {torch.cuda.memory_reserved()/1024/1024/1024} GB")
-    # return token_embeddings
+
     return token_embeddings
 
 
 def get_rna_fm_model():
     torch.cuda.empty_cache()
-
-    # Load RNA-FM model
     EmbbingModel, alphabet = fm.pretrained.rna_fm_t12()
     batch_converter = alphabet.get_batch_converter()
     EmbbingModel.to(device)
-    EmbbingModel.eval()  # disables dropout for deterministic results
+    EmbbingModel.eval()
 
     return EmbbingModel, batch_converter
 
@@ -161,31 +89,23 @@ def read_data_cae(file_path, EmbbingModel, batch_converter):
     input_seqs = []
     true_seqs = []
     bd_scores = []
-    # 按照传入的路径和txt文本参数，以只读的方式打开这个文本
     for line in lines:
         words = line.split()
         b = words[-1]
-
-        # values_list = ast.literal_eval(b)
 
         rna_one_hot = convert_to_rna_sequence_rna_fm(b)
 
         values_list = list(rna_one_hot)
 
         values_list.insert(0, 0)
-        # print(values_list)
+
 
         input_seq = values_list[:-1]
         true_seq = values_list[1:]
 
-        # input_seq = torch.tensor(input_seq)
-        # true_seq = torch.tensor(true_seq)
-
         decimal_part = float(words[0])
         decimal_part = (sigmoid(decimal_part, 0.05)-0.5)*2.0
-        # decimal_part = int((int(words[-1]) - 100) >= 0)
 
-        # rna-fm的表征
 
         seq = ("undefined", b)
         seq_unused = ('UNUSE', 'ACGU')
@@ -197,19 +117,10 @@ def read_data_cae(file_path, EmbbingModel, batch_converter):
         rna_fm = rna_fm[1:-1, :]
         rna_fm = rna_fm.cpu().numpy()
 
-        # 下面这个是展开FM表征
-        #rna_fm = rna_fm.reshape(-1)
 
-        # 下面这个是平均FM表征
         rna_fm = np.mean(rna_fm, axis=0)
-        # rna_fm = standardization(rna_fm)
+        rna_fm = standardization(rna_fm)
 
-        # rna_fm = torch.load(words[0])
-        # rna_fm = torch.mean(rna_fm, axis=0)
-        # rna_fm = torch.mean(rna_fm, dim=0)
-
-        # rna_fm = torch.load(words[0])
-        # print(rna_fm.shape)
         rnas.append(rna_fm)
         input_seqs.append(input_seq)
         true_seqs.append(true_seq)
@@ -217,7 +128,6 @@ def read_data_cae(file_path, EmbbingModel, batch_converter):
     return rnas, input_seqs, true_seqs, bd_scores
 
 
-# 处理等长序列
 def read_data(file_path, is_batch=False):
     EmbbingModel, batch_converter = get_rna_fm_model()
 
@@ -235,7 +145,6 @@ def read_data(file_path, is_batch=False):
         bd_scores1 = torch.tensor(np.asarray(bd_scores)).to(device)
 
     return rnas1, input_seqs1, true_seqs1, bd_scores1
-    # rnas.append((rna_fm, input_seq, true_seq, decimal_part))
 
 
 class Myloss(nn.Module):
@@ -252,8 +161,6 @@ class Myloss(nn.Module):
 
 
 def train_CAE():
-    # 设置随机数种子
-    # setup_seed(123)
     train_file = '/home2/public/data/RNA_aptamer/All_data/round1-sample1-ex-apt/train_wo_representation_seq.txt'
     test_file = '/home2/public/data/RNA_aptamer/All_data/round1-sample1-ex-apt/test_wo_representation_seq.txt'
     batch_size = 5000
@@ -277,24 +184,19 @@ def train_CAE():
                              pin_memory=True,
                              drop_last=False)
 
-    model = Full_CAE_Model(input_dim=12800,  # 输入特征的维度
-                           model_dim=640,  # LLM适配器（Encoder）隐含层的大小, Transformer模型维度
-                           tgt_size=5,  # 碱基种类数
-                           n_declayers=2,  # Transformer解码器层数
-                           d_ff=128,  # Transformer前馈网络隐含层维度
+    model = Full_CAE_Model(input_dim=12800,
+                           model_dim=640,
+                           tgt_size=5,
+                           n_declayers=2,
+                           d_ff=128,
                            d_k_v=64,
-                           n_heads=2,  # Transformer注意力头数
+                           n_heads=2,
                            dropout=0.05)
-    #
-    # model = SimpleModel(input_dim=640,
-    #                     model_dim=128,
-    #                     dropout=0.0)
 
     model = model.to(device)
 
-    loss_func1 = nn.MSELoss()  # nn.BCEWithLogitsLoss()#
-    loss_func2 = nn.CrossEntropyLoss(ignore_index=0)  #
-    # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)#0.0001
+    loss_func1 = nn.MSELoss()
+    loss_func2 = nn.CrossEntropyLoss(ignore_index=0)
     w = 0.15
 
     model_name = 'round1-sample1_womlp-250_loss1_loss2_085-015_2.model'
@@ -319,16 +221,14 @@ def train_CAE():
             labels = labels.to(device)
 
             labels = labels.float().view(-1, 1)
-            pred_seqs = model(inputs, input_seqs)  # model(inputs)#
+            pred_seqs = model(inputs, input_seqs)
 
             pred_seqs = torch.softmax(pred_seqs, -1)
             true_seqs = true_seqs.view(-1)
             pred_seqs = pred_seqs.view(true_seqs.shape[0], 5)
 
-            # loss1 = loss_func1(bind_socres, labels)
             loss2 = loss_func2(pred_seqs, true_seqs)
             pred_seqs = torch.argmax(pred_seqs, -1)
-            # acc1 = torchmetrics.functional.accuracy(bind_socres, labels, task="binary", num_classes=2)
             acc2 += torchmetrics.functional.accuracy(pred_seqs,
                                                      true_seqs,
                                                      task="multiclass",
@@ -336,9 +236,9 @@ def train_CAE():
                                                      ignore_index=0,
                                                      average="micro")
 
-            # loss = w * loss1 + (1.0 - w) * loss2
+
             loss = loss2
-            # loss1_value += loss1.item()
+
             loss2_value += loss2.item()
             optimizer.zero_grad()
             loss.backward()
@@ -358,17 +258,15 @@ def train_CAE():
             true_seqs = true_seqs.to(device)
             labels = labels.to(device)
 
-            pred_seqs = model(inputs, input_seqs)  # model(inputs)#
+            pred_seqs = model(inputs, input_seqs)
             pred_seqs = torch.softmax(pred_seqs, -1)
             labels = labels.float().view(-1, 1)
 
             true_seqs = true_seqs.view(-1)
             pred_seqs = pred_seqs.view(true_seqs.shape[0], 5)
 
-            # loss1 = loss_func1(bind_socres, labels)
             loss2 = loss_func2(pred_seqs, true_seqs)
 
-            # te_acc1 = torchmetrics.functional.accuracy(bind_socres, labels, task="binary", num_classes=2)
             pred_seqs = torch.argmax(pred_seqs, -1)
             te_acc2 += torchmetrics.functional.accuracy(pred_seqs,
                                                         true_seqs,
@@ -377,7 +275,7 @@ def train_CAE():
                                                         ignore_index=0,
                                                         average="micro")
 
-            # test_loss1_value += loss1.item()
+
             test_loss2_value += loss2.item()
             test_b_num += 1.
         end_t = time.time()
@@ -410,7 +308,6 @@ def main():
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda
 
-    # 根据参数选择函数
     if args.function == '1':
         train_CAE()
 

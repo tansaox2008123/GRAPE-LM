@@ -86,46 +86,6 @@ def greedy_VAE(model):
     return ys,
 
 
-def greedy_decode2(model, input_src, max_len, start_symbol, is_noise=True):
-    if is_noise:
-        input_src = add_gaussian_noise(input_src, mean=0.0, std=0.1)
-    memory = model.encoder(input_src)
-    ys = torch.ones(1).fill_(start_symbol).type_as(input_src.data).long()
-
-    pro_matrix = torch.empty((1, 5), device=device)
-    for i in range(max_len):
-        out = model.decoder(ys, memory)
-        selected_tensor = out[0]
-        selected_tensor = torch.squeeze(selected_tensor, dim=0)
-        prob = model.generator(selected_tensor)
-        pro_matrix = torch.cat((pro_matrix, prob))
-
-        _, next_word_idx = torch.max(prob, dim=1)
-        next_word = next_word_idx[-1]
-
-        ys = torch.cat([ys,
-                        torch.ones(1).type_as(input_src.data).fill_(next_word)], dim=0).long()
-    return ys, pro_matrix
-
-
-def greedy_decode3(model, input_src, max_len, start_symbol, is_noise=True):
-    if is_noise:
-        input_src = add_gaussian_noise(input_src, mean=0.0, std=0.1)
-    memory = model.encoder(input_src)
-    ys = torch.ones(1, 5).fill_(0).type_as(input_src.data).long()
-
-    pro_matrix = torch.empty((1, 5), device=device)
-    for i in range(max_len):
-        out = model.decoder(ys, memory)
-        selected_tensor = out[0]
-        selected_tensor = torch.squeeze(selected_tensor, dim=0)
-        prob = model.generator(selected_tensor)
-        pro_matrix = torch.cat((pro_matrix, prob))
-
-        ys = pro_matrix
-    return ys, pro_matrix
-
-
 def add_gaussian_noise(tensor, mean=0.0, std=1.0):
     noise = torch.randn(tensor.size()).to(device) * std + mean
     noisy_tensor = tensor + noise
@@ -236,8 +196,6 @@ def get_sample_AE_rna_fm(low, high ,num, input_file):
         rna_fm = standardization(rna_fm)
 
         rnas.append(rna_fm)
-    # rnas = np.asarray(rnas)
-    # rnas = np.mean(rnas, axis=0)
     rnas = torch.tensor(rnas).to(device)
     return rnas
 
@@ -504,14 +462,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-    # 无MLP
-    # rnas = get_sample2()
-    # for rna_input in rnas:
-    #     random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
-    #     random_seq2 = greedy_decode_ex_MLP(model, random_rna_inputs, 20, 0, True)
-    #     random_rnas2.append(random_seq2)
-    #     print("使用greedy_decode生成的随机采用生成序列：" + str(random_seq2))
 
 
 
