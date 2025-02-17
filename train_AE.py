@@ -149,35 +149,18 @@ def read_data_evo(file_path, model, tokenizer):
     for line in lines:
         words = line.split()
         b = words[-1]
-        # print(b)
-        # a = words[-1]
-        # 获取匹配到的部分
-        # 将字符串表示的列表转换为实际的列表
-
-        # values_list = ast.literal_eval(b)
 
         rna_one_hot = convert_to_rna_sequence_rna_fm(b)
-        # print(rna_one_hot)
 
         values_list = list(rna_one_hot)
 
         values_list.insert(0, 0)
-        # print(values_list)
 
         input_seq = values_list[:-1]
         true_seq = values_list[1:]
 
-        # input_seq = torch.tensor(input_seq)
-        # true_seq = torch.tensor(true_seq)
-
         decimal_part = float(words[0])
         decimal_part = (sigmoid(decimal_part, 0.05) - 0.5) * 2.0
-
-        # 不使用rna_fm直接使用one-hot编码
-        # rna_fm = values_list[1:]
-
-        # rna-fm的表征
-        # rna_fm = np.load(words[0])
 
         sequence = b
 
@@ -194,14 +177,9 @@ def read_data_evo(file_path, model, tokenizer):
         cpu_logits = logits.cpu()
 
         rna_fm = cpu_logits.numpy()
-        # 展开FM表征
+
         rna_fm = rna_fm.reshape(-1)
         rna_fm = standardization(rna_fm)
-
-        # 平均FM表征
-        # rna_fm = rna_fm.squeeze(0)
-        # rna_fm = np.mean(rna_fm, axis=0)
-        # rna_fm = standardization(rna_fm)
 
         rnas.append(rna_fm)
         input_seqs.append(input_seq)
@@ -537,9 +515,9 @@ def train_AE_LLM_Evo():
     loss_func1 = nn.MSELoss()
     loss_func2 = nn.CrossEntropyLoss(ignore_index=0)
 
-    w = 0
+    w = 0.15
 
-    model_name = '2-CD3E_rnafm-250_loss1_loss2_000-100_2'
+    model_name = '2-CD3E_evo-250_loss1_loss2_015-085_3'
     fw = open('log/' + model_name + '_training_log.txt', 'w')
     """分批次训练"""
     for epoch in range(250):
@@ -682,9 +660,9 @@ def train_AE_woLLM():
     loss_func1 = nn.MSELoss()
     loss_func2 = nn.CrossEntropyLoss(ignore_index=0)
 
-    w = 0
+    w = 0.15
 
-    model_name = '2-CD3E_rnafm-250_loss1_loss2_000-100_2'
+    model_name = 'round1-sample1-250_AE_wollm_loss1_loss2_015-085'
     fw = open('log/' + model_name + '_training_log.txt', 'w')
     """分批次训练"""
     for epoch in range(250):

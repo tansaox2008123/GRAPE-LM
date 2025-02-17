@@ -202,7 +202,7 @@ def read_data_cae(file_path, EmbbingModel, batch_converter):
 
         # 下面这个是平均FM表征
         rna_fm = np.mean(rna_fm, axis=0)
-        rna_fm=standardization(rna_fm)
+        # rna_fm = standardization(rna_fm)
 
         # rna_fm = torch.load(words[0])
         # rna_fm = torch.mean(rna_fm, axis=0)
@@ -297,7 +297,7 @@ def train_CAE():
     # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)#0.0001
     w = 0.15
 
-    model_name = '2-CD3E_womlp-250_loss1_loss2_085-015.model'
+    model_name = 'round1-sample1_womlp-250_loss1_loss2_085-015_2.model'
     fw = open('log/' + model_name + '_training_log.txt', 'w')
 
     """分批次训练"""

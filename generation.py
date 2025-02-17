@@ -6,11 +6,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
-import numpy as np
-import time
-import math
-import torch.optim as optim
-import pandas as pd
+import fm
+import argparse
+from evo import Evo
+
 from model_AE import *
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '7'
@@ -19,278 +18,6 @@ if torch.cuda.is_available():
     device = torch.device("cuda")
 else:
     device = torch.device("cpu")
-
-
-def get_sample(low, high, num):
-    fp = '/home2/public/data/RNA_aptamer/All_embedding/2-ex-apt/representations/'
-    rnas = []
-    for _ in range(num):
-        i = random.randint(low, high)
-        j = random.randint(low, high)
-        # rna_fm1 = np.load(fp + str(i) + '.npy')
-        # rna_fm2 = np.load(fp + str(j) + '.npy')
-        rna_fm1 = np.load(fp + str(i) + '.npy')
-        rna_fm2 = np.load(fp + str(j) + '.npy')
-
-        rna_fm = (rna_fm1 + rna_fm2) / 2
-
-        # rna_fm = rna_fm.reshape(-1)
-
-        # 下面这个是展开FM表征
-        rna_fm = rna_fm.reshape(-1)
-        rna_fm = standardization(rna_fm)
-        # rna_fm = np.mean(rna_fm, axis=0)
-
-        rnas.append(rna_fm)
-    # rnas = np.asarray(rnas)
-    # rnas = np.mean(rnas, axis=0)
-    rnas = torch.tensor(rnas).to(device)
-    return rnas
-
-
-def get_onehot(low, high, num):
-    fp = '/home2/public/data/RNA_aptamer/All_data/4_ex_apt/4-her2-all-sort.txt'
-    with open(fp, 'r') as file:
-        lines = file.readlines()
-
-    i = random.randint(low, high)
-    j = random.randint(low, high)
-
-    words1 = lines[i].split()
-    b1 = words1[1:]
-    a1 = ''.join(b1)
-    match1 = re.search(r'\[.*\]', a1)
-
-    words2 = lines[j].split()
-    b2 = words2[1:]
-    a2 = ''.join(b2)
-    match2 = re.search(r'\[.*\]', a2)
-
-    # 获取匹配到的部分
-    substring1 = match1.group(0)
-    substring2 = match2.group(0)
-    list1 = substring1
-    list2 = substring2
-
-    list1 = [try_convert_to_int(x) for x in list1 if try_convert_to_int(x) is not None]
-    list2 = [try_convert_to_int(y) for y in list2 if try_convert_to_int(y) is not None]
-    # 使用列表推导式来计算每一对值的平均值
-    average_list = [(x + y) / 2 for x, y in zip(list1, list2)]
-    rnas1 = torch.tensor(average_list, dtype=torch.float32).to(device)
-
-    return rnas1
-
-
-def try_convert_to_int(value):
-    try:
-        return int(value)
-    except ValueError:
-        return None
-
-
-# womlp
-def get_sample2():
-    input_file = '/home2/public/data/RNA_aptamer/RNA_generation/same_sample/round1-sample1-ex_sample_num_10.txt'
-    fp = '/home2/public/data/RNA_aptamer/All_embedding/2-ex-apt/representations/'
-    rnas = []
-
-    with open(input_file, 'r') as file1:
-        for line in file1:
-            i = int(line.split()[0])
-            j = int(line.split()[1])
-
-            rna_fm1 = np.load(fp + str(i) + '.npy')
-            rna_fm2 = np.load(fp + str(j) + '.npy')
-
-            rna_fm = (rna_fm1 + rna_fm2) / 2
-
-            # 下面这个是展开FM表征
-            # rna_fm = rna_fm.reshape(-1)
-            rna_fm = np.mean(rna_fm, axis=0)
-            rna_fm = standardization(rna_fm)
-
-            rnas.append(rna_fm)
-    # rnas = np.asarray(rnas)
-    # rnas = np.mean(rnas, axis=0)
-    rnas = torch.tensor(rnas).to(device)
-    return rnas
-
-
-# without rna-fm
-def get_sample3():
-    input_file = '/home2/public/data/RNA_aptamer/RNA_generation/same-sample-CD3E/CD3E-8515_sample_num_1.txt'
-    fp = '/home2/public/data/RNA_aptamer/All_embedding/round1-sample1-ex-cluster/'
-    rnas = []
-    input_file2 = '/home2/public/data/RNA_aptamer/All_data/round1-sample1-ex-apt/All_sort_bdscores.txt'
-
-    with open(input_file2, 'r') as file2:
-        lines = file2.readlines()
-
-    with open(input_file, 'r') as file1:
-        for line in file1:
-            i = int(line.split()[0])
-            j = int(line.split()[1])
-
-            words1 = lines[i].split()
-            b1 = words1[1:]
-            a1 = ''.join(b1)
-            match1 = re.search(r'\[.*\]', a1)
-
-            words2 = lines[j].split()
-            b2 = words2[1:]
-            a2 = ''.join(b2)
-            match2 = re.search(r'\[.*\]', a2)
-
-            # 获取匹配到的部分
-            substring1 = match1.group(0)
-            substring2 = match2.group(0)
-            list1 = substring1
-            list2 = substring2
-
-            list1 = [try_convert_to_int(x) for x in list1 if try_convert_to_int(x) is not None]
-            list2 = [try_convert_to_int(y) for y in list2 if try_convert_to_int(y) is not None]
-            # 使用列表推导式来计算每一对值的平均值
-            average_list = [(x + y) / 2 for x, y in zip(list1, list2)]
-
-            rnas.append(average_list)
-    # rnas = np.asarray(rnas)
-    # rnas = np.mean(rnas, axis=0)
-
-    rnas = torch.tensor(rnas).to(device)
-
-    return rnas
-
-
-# 无MLP
-def get_sample4():
-    input_file = '/home2/public/data/RNA_aptamer/RNA_generation/same_sample/round1-sample1-ex_sample_num_10.txt'
-    fp = '/home2/public/data/RNA_aptamer/All_embedding/round1-sample1-ex-cluster/'
-    rnas = []
-
-    with open(input_file, 'r') as file1:
-        for line in file1:
-            i = int(line.split()[0])
-            j = int(line.split()[1])
-
-            rna_fm1 = np.load(fp + str(i) + '.npy')
-            rna_fm2 = np.load(fp + str(j) + '.npy')
-
-            rna_fm = (rna_fm1 + rna_fm2) / 2
-
-            # rna_fm = np.mean(rna_fm, axis=0)
-
-            # 下面这个是展开FM表征
-            rna_fm = rna_fm.reshape(-1)
-            rna_fm = standardization(rna_fm)
-
-            rnas.append(rna_fm)
-    # rnas = np.asarray(rnas)
-    # rnas = np.mean(rnas, axis=0)
-    rnas = torch.tensor(rnas).to(device)
-    return rnas
-
-
-# evo&rna-fm
-def get_sample5():
-    input_file = '/home2/public/data/RNA_aptamer/RNA_generation/same_sample/round1-sample1-ex_sample_num_10.txt'
-    fp = '/home2/public/data/RNA_aptamer/All_embedding/round1-sample1-ex-apt-evo/representations/'
-    rnas = []
-
-    with open(input_file, 'r') as file1:
-        for line in file1:
-            i = int(line.split()[0])
-            j = int(line.split()[1])
-
-            rna_fm1 = np.load(fp + str(i) + '.npy')
-            rna_fm2 = np.load(fp + str(j) + '.npy')
-
-            rna_fm = (rna_fm1 + rna_fm2) / 2
-
-            # rna_fm = np.mean(rna_fm, axis=0)
-
-            # 下面这个是展开FM表征
-            rna_fm = rna_fm.reshape(-1)
-            rna_fm = standardization(rna_fm)
-
-            rnas.append(rna_fm)
-    # rnas = np.asarray(rnas)
-    # rnas = np.mean(rnas, axis=0)
-    rnas = torch.tensor(rnas).to(device)
-    return rnas
-
-
-
-
-# evo&rna-fm
-def get_sample6(input_file):
-    # input_file = '/home2/public/data/RNA_aptamer/RNA_generation/same_sample/round1-sample1-ex_sample_num_10.txt'
-    fp = '/home2/public/data/RNA_aptamer/All_embedding/2-ex-apt-evo/representations/'
-    rnas = []
-
-    with open(input_file, 'r') as file1:
-        for line in file1:
-            i = int(line.split()[0])
-            j = int(line.split()[1])
-
-            rna_fm1 = np.load(fp + str(i) + '.npy')
-            rna_fm2 = np.load(fp + str(j) + '.npy')
-
-            rna_fm = (rna_fm1 + rna_fm2) / 2
-
-            # rna_fm = np.mean(rna_fm, axis=0)
-
-            # 下面这个是展开FM表征
-            rna_fm = rna_fm.reshape(-1)
-            rna_fm = standardization(rna_fm)
-
-            rnas.append(rna_fm)
-    # rnas = np.asarray(rnas)
-    # rnas = np.mean(rnas, axis=0)
-    rnas = torch.tensor(rnas).to(device)
-    return rnas
-
-
-# 使用平均值来进行样本提取
-def get_sample7(input_file):
-    rnas = []
-    input_file2 = '/home2/public/data/RNA_aptamer/All_data/2_ex_apt/All_sort_train_data.txt'
-
-    with open(input_file2, 'r') as file2:
-        lines = file2.readlines()
-
-    with open(input_file, 'r') as file1:
-        for line in file1:
-            i = int(line.split()[0])
-            j = int(line.split()[1])
-
-            words1 = lines[i].split()
-            b1 = words1[1:]
-            a1 = ''.join(b1)
-            match1 = re.search(r'\[.*\]', a1)
-
-            words2 = lines[j].split()
-            b2 = words2[1:]
-            a2 = ''.join(b2)
-            match2 = re.search(r'\[.*\]', a2)
-
-            # 获取匹配到的部分
-            substring1 = match1.group(0)
-            substring2 = match2.group(0)
-            list1 = substring1
-            list2 = substring2
-
-            list1 = [try_convert_to_int(x) for x in list1 if try_convert_to_int(x) is not None]
-            list2 = [try_convert_to_int(y) for y in list2 if try_convert_to_int(y) is not None]
-            # 使用列表推导式来计算每一对值的平均值
-            average_list = [(x + y) / 2 for x, y in zip(list1, list2)]
-
-            rnas.append(average_list)
-    # rnas = np.asarray(rnas)
-    # rnas = np.mean(rnas, axis=0)
-
-    rnas = torch.tensor(rnas).to(device)
-
-    return rnas
 
 
 def greedy_decode_wollm(model, input_src, max_len, start_symbol, is_noise=False):
@@ -325,7 +52,7 @@ def greedy_decode_ex_MLP(model, input_src, max_len, start_symbol, is_noise=True)
     return ys
 
 
-def greedy_decode_rna_fm(model, input_src, max_len, start_symbol, is_noise=True):
+def greedy_decode_llm(model, input_src, max_len, start_symbol, is_noise=True):
     if is_noise:
         input_src = add_gaussian_noise(input_src, mean=0.0, std=0.1)
     memory = model.encoder(input_src)
@@ -339,6 +66,24 @@ def greedy_decode_rna_fm(model, input_src, max_len, start_symbol, is_noise=True)
         ys = torch.cat([ys,
                         torch.ones(1, 1).type_as(input_src.data).fill_(next_word)], dim=1).long()
     return ys
+
+
+def greedy_VAE(model):
+    z = torch.randn(1, 128).to(device)  # 生成64个随机的潜在向量
+    ys = torch.ones(1, 1).fill_(0).type_as(z.data).long().to(device)
+    # generated_sequences = model.decoder(ys, z)
+
+    for i in range(20):
+
+        out = model.decoder(ys, z)
+        selected_tensor = out[0]
+        prob = model.generator(selected_tensor[:, -1])
+        _, next_word = torch.max(prob, dim=1)
+        next_word = next_word.item()
+        ys = torch.cat([ys,
+                        torch.ones(1, 1).type_as(z).fill_(next_word)], dim=1).long()
+
+    return ys,
 
 
 def greedy_decode2(model, input_src, max_len, start_symbol, is_noise=True):
@@ -393,22 +138,372 @@ def standardization(data):
     return (data - mu) / sigma
 
 
-if __name__ == '__main__':
-    model = torch.load('model/2-ex-apt-MLP.model')
+def convert_to_rna_sequence_rna_fm(data):
+    # 创建映射字典
+    rna_to_num = {'A': 1, 'C': 2, 'G': 3, 'U': 4}
+
+    # 将RNA序列转换为数字
+    numbers = [rna_to_num.get(base, -1) for base in data.upper()]
+
+    return numbers
+
+def get_rna_fm_model():
+    torch.cuda.empty_cache()
+
+    EmbbingModel, alphabet = fm.pretrained.rna_fm_t12()
+    batch_converter = alphabet.get_batch_converter()
+    EmbbingModel.to(device)
+    EmbbingModel.eval()
+
+    return EmbbingModel, batch_converter
+
+
+def get_evo_model():
+    evo_model = Evo('evo-1-8k-base')
+    model, tokenizer = evo_model.model, evo_model.tokenizer
+
+    return model,tokenizer
+
+
+def rna_seq_embbding(OriginSeq, batch_converter, EmbeddingModel):
+    EmbeddingModel = EmbeddingModel.to(device)
+    batch_labels, batch_strs, batch_tokens = batch_converter(OriginSeq)
+    batch_tokens = batch_tokens.to(device)
+
+    with torch.no_grad():
+        results = EmbeddingModel(batch_tokens, repr_layers=[12])
+    token_embeddings = results["representations"][12][0]
+
+    return token_embeddings
+
+
+
+
+def get_rna_fm_embedding(seq, batch_converter, EmbbingModel):
+    rna_seq = ("undefined", seq)
+    seq_unused = ('UNUSE', 'ACGU')
+    all_rna = []
+    all_rna.append(rna_seq)
+    all_rna.append(seq_unused)
+
+    rna_fm = rna_seq_embbding(all_rna, batch_converter, EmbbingModel)
+    rna_fm = rna_fm[1:-1, :]
+    rna_fm = rna_fm.cpu().numpy()
+
+    return rna_fm
+
+
+def get_evo_embedding(seq, model, tokenizer):
+    sequence = seq
+
+    input_ids = torch.tensor(
+        tokenizer.tokenize(sequence),
+        dtype=torch.int,
+    ).to(device).unsqueeze(0)
+
+    with torch.no_grad():
+        logits, _ = model(input_ids)
+
+    logits = logits.detach()
+    logits = logits.float()
+    cpu_logits = logits.cpu()
+
+    rna_evo = cpu_logits.numpy()
+
+    return rna_evo
+
+
+def get_sample_AE_rna_fm(low, high ,num, input_file):
+    EmbbingModel, batch_converter = get_rna_fm_model()
+    with open(input_file,'r') as file:
+        lines = file.readlines()
+
+
+    rnas = []
+    for _ in range(num):
+        i = random.randint(low, high)
+        j = random.randint(low, high)
+
+        line_1 =lines[i].split()[-1]
+        line_2 =lines[j].split()[-1]
+
+        rna_fm1 = get_rna_fm_embedding(line_1, batch_converter, EmbbingModel)
+        rna_fm2 = get_rna_fm_embedding(line_2, batch_converter, EmbbingModel)
+
+        rna_fm = (rna_fm1 + rna_fm2) / 2
+
+        rna_fm = rna_fm.reshape(-1)
+        rna_fm = standardization(rna_fm)
+
+        rnas.append(rna_fm)
+    # rnas = np.asarray(rnas)
+    # rnas = np.mean(rnas, axis=0)
+    rnas = torch.tensor(rnas).to(device)
+    return rnas
+
+
+
+def get_sample_AE_evo(low, high ,num, input_file):
+    model, tokenizer = get_evo_model()
+    model.to(device)
+    model.eval()
+
+
+    with open(input_file,'r') as file:
+        lines = file.readlines()
+
+    rnas = []
+    for _ in range(num):
+        i = random.randint(low, high)
+        j = random.randint(low, high)
+
+        line_1 =lines[i].split()[-1]
+        line_2 =lines[j].split()[-1]
+
+        rna_fm1 = get_evo_embedding(line_1, model, tokenizer)
+        rna_fm2 = get_evo_embedding(line_2, model, tokenizer)
+
+        rna_fm = (rna_fm1 + rna_fm2) / 2
+
+        rna_fm = rna_fm.reshape(-1)
+        rna_fm = standardization(rna_fm)
+
+        rnas.append(rna_fm)
+    rnas = torch.tensor(rnas).to(device)
+    return rnas
+
+
+def get_sample_AE_wollm(low, high ,num, input_file):
+    with open(input_file, 'r') as file:
+        lines = file.readlines()
+    rnas = []
+
+    for _ in range(num):
+        rna_1 = []
+        rna_2 = []
+
+        i = random.randint(low, high)
+        j = random.randint(low, high)
+
+        words1 = lines[i].split()
+        seq_1 = words1[-1]
+        words2 = lines[j].split()
+        seq_2 = words2[-1]
+
+        rna_1 = convert_to_rna_sequence_rna_fm(seq_1)
+        rna_2 = convert_to_rna_sequence_rna_fm(seq_2)
+        average_list = [(x + y) / 2 for x, y in zip(rna_1, rna_2)]
+
+        rnas1 = torch.tensor(average_list, dtype=torch.float32).to(device)
+
+        rnas.append(rnas1)
+    return rnas
+
+
+
+def get_sample_CAE_womlp(low, high ,num, input_file):
+    EmbbingModel, batch_converter = get_rna_fm_model()
+
+    with open(input_file, 'r') as file:
+        lines = file.readlines()
+    rnas = []
+
+
+    for _ in range(num):
+        i = random.randint(low, high)
+        j = random.randint(low, high)
+
+        line_1 =lines[i].split()[-1]
+        line_2 =lines[j].split()[-1]
+
+        rna_fm1 = get_rna_fm_embedding(line_1, batch_converter, EmbbingModel)
+        rna_fm2 = get_rna_fm_embedding(line_2, batch_converter, EmbbingModel)
+
+        rna_fm = (rna_fm1 + rna_fm2) / 2
+
+        rna_fm = np.mean(rna_fm, axis=0)
+        rna_fm = standardization(rna_fm)
+
+        rnas.append(rna_fm)
+    # rnas = np.asarray(rnas)
+    # rnas = np.mean(rnas, axis=0)
+    rnas = torch.tensor(rnas).to(device)
+    return rnas
+
+
+def generation_AE_rna_fm(input_file, output_file, model_name, num):
+    model_name_2=f'model/{model_name}'
+
+    model = torch.load(model_name_2)
     model.eval()
     model = model.to(device)
 
-    random_rnas1 = []
-    random_rnas2 = []
+    with open(input_file, 'r') as file:
+        lines = file.readlines()
+        num_lines = len(lines)
+
+    random_rnas = []
 
     # rna-fm random
-    rnas = get_sample(0,2000,10000)
+    rnas = get_sample_AE_rna_fm(0, num_lines-1, num, input_file)
     for rna_input in rnas:
         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
-        random_seq2 = greedy_decode_rna_fm(model, random_rna_inputs, 20, 0, True)
-        random_rnas2.append(random_seq2)
+        random_seq = greedy_decode_llm(model, random_rna_inputs, 20, 0, True)
+        random_rnas.append(random_seq)
+        print("使用greedy_decode生成的随机采用生成序列：" + str(random_seq))
+
+    with open(output_file, 'w') as file2:
+        for line in random_rnas:
+            file2.write(str(line) + '\n')
+
+
+def generation_AE_evo(input_file, output_file, model_name, num):
+    model_name_2=f'model/{model_name}'
+
+    model = torch.load(model_name_2)
+    model.eval()
+    model = model.to(device)
+
+    with open(input_file, 'r') as file:
+        lines = file.readlines()
+        num_lines = len(lines)
+
+    random_rnas = []
+
+    # rna-fm random
+    rnas = get_sample_AE_evo(0, num_lines - 1, num, input_file)
+    for rna_input in rnas:
+        random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
+        random_seq = greedy_decode_llm(model, random_rna_inputs, 20, 0, True)
+        random_rnas.append(random_seq)
+        print("使用greedy_decode生成的随机采用生成序列：" + str(random_seq))
+
+    with open(output_file, 'w') as file2:
+        for line in random_rnas:
+            file2.write(str(line) + '\n')
+
+
+
+def generation_AE_wollm(input_file, output_file, model_name, num):
+    model_name_2=f'model/{model_name}'
+
+    model = torch.load(model_name_2)
+    model.eval()
+    model = model.to(device)
+
+    with open(input_file, 'r') as file:
+        lines = file.readlines()
+        num_lines = len(lines)
+
+    random_rnas = []
+
+    rnas = get_sample_AE_wollm(0, num_lines-1, num, input_file)
+
+    for rna_input in rnas:
+        random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
+        random_seq2 = greedy_decode_wollm(model, random_rna_inputs, 20, 0, False)
+        random_rnas.append(random_seq2)
         print("使用greedy_decode生成的随机采用生成序列：" + str(random_seq2))
 
+    with open(output_file, 'w') as file2:
+        for line in random_rnas:
+            file2.write(str(line) + '\n')
+
+
+def generation_CAE_womlp(input_file, output_file, model_name, num):
+    model_name_2=f'model/{model_name}'
+
+    model = torch.load(model_name_2)
+    model.eval()
+    model = model.to(device)
+
+    with open(input_file, 'r') as file:
+        lines = file.readlines()
+        num_lines = len(lines)
+
+    random_rnas = []
+
+    rnas = get_sample_CAE_womlp(0, num_lines - 1, num, input_file)
+
+    for rna_input in rnas:
+        random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
+        random_seq = greedy_decode_ex_MLP(model, random_rna_inputs, 20, 0, True)
+        random_rnas.append(random_seq)
+        print("使用greedy_decode生成的随机采用生成序列：" + str(random_seq))
+
+
+    with open(output_file, 'w') as file2:
+        for line in random_rnas:
+            file2.write(str(line) + '\n')
+
+
+def generation_VAE(input_file, output_file, model_name, num):
+    model_name_2=f'model/{model_name}'
+
+    model = torch.load(model_name_2)
+    model.eval()
+    model = model.to(device)
+
+
+    random_rnas = []
+
+    for i in range(num):
+        random_seq2 = greedy_VAE(model)
+        print(random_seq2)
+        random_rnas.append(random_seq2)
+
+
+    with open(output_file, 'w') as file2:
+        for line in random_rnas:
+            file2.write(str(line) + '\n')
+
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Choose which function to run.")
+    parser.add_argument('function', choices=['1', '2', '3', '4', '5'], help="Function to run")
+    parser.add_argument('--cuda', type=str, default="0", help="CUDA device ID (e.g., '0', '1', '2')")
+    parser.add_argument('--input_file', type=str, help="-----")
+    parser.add_argument('--output_file', type=str, help="-----")
+    parser.add_argument('--model_name', type=str, help="-----")
+    parser.add_argument('--num', type=int, help="-----")
+
+    args = parser.parse_args()
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda
+    input_file = args.input_file
+    output_file = args.output_file
+    model_name = args.model_name
+    num = args.num
+
+    # 根据参数选择函数
+    if args.function == '1':
+        generation_AE_rna_fm(input_file,
+                             output_file,
+                             model_name,
+                             num)
+    elif args.function == '2':
+        generation_AE_evo(input_file,
+                          output_file,
+                          model_name,
+                          num)
+    elif args.function == '3':
+        generation_AE_wollm(input_file,
+                            output_file,
+                            model_name,
+                            num)
+    elif args.function == '4':
+        generation_CAE_womlp(input_file,
+                             output_file,
+                             model_name,
+                             num)
+    elif args.function == '5':
+        generation_VAE(input_file,
+                       output_file,
+                       model_name,
+                       num)
+
+if __name__ == '__main__':
+    main()
 
     # 无MLP
     # rnas = get_sample2()
@@ -420,39 +515,7 @@ if __name__ == '__main__':
 
 
 
-    # evo&rna-fm
-    # for i in range(10):
-    #     input_file = f'/home2/public/data/RNA_aptamer/RNA_generation/same_sample/round1-sample1-ex_sample_num_{i+1}.txt'
-    #     rnas = []
-    #     rnas = get_sample6(input_file)
-    #     for rna_input in rnas:
-    #         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
-    #         random_seq2 = greedy_decode_rna_fm(model, random_rna_inputs, 20, 0, True)
-    #         random_rnas2.append(random_seq2)
-    #         print("使用greedy_decode生成的随机采用生成序列：" + str(random_seq2))
-    #
-    #     input_file2 = f"/home2/public/data/RNA_aptamer/RNA_generation/2-ex-apt-loss8515/evo/CD3E-highbd-8515-evo-generation_{i+1}.txt"
-    #     with open(input_file2, 'w') as file2:
-    #         for line in random_rnas2:
-    #             file2.write(str(line) + '\n')
 
-
-    # wollm
-    # for i in range(10):
-    #     input_file = f'/home2/public/data/RNA_aptamer/RNA_generation/same_sample/round1-sample1-ex_sample_num_{i+1}.txt'
-    #     rnas = []
-    #     rnas = get_sample7(input_file)
-    #     for rna_input in rnas:
-    #         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
-    #         random_seq2 = greedy_decode_wollm(model, random_rna_inputs, 20, 0, True)
-    #         random_rnas2.append(random_seq2)
-    #         print("使用greedy_decode生成的随机采用生成序列：" + str(random_seq2))
-
-
-    input_file2 = "/home2/public/data/RNA_aptamer/RNA_generation/2-CD3E_tsne/CD3E-lowbd-015085-rnafm-generation_low200-222.txt"
-    with open(input_file2, 'w') as file2:
-        for line in random_rnas2:
-            file2.write(str(line) + '\n')
 
 
 

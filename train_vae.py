@@ -310,7 +310,7 @@ def train_VAE():
     # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)#0.0001
     w = 0.15
 
-    model_name = '2-ex-apt-VAE'
+    model_name = 'round1-sample1-ex-apt-VAE'
     fw = open('log/' + model_name + '_training_log.txt', 'w')
 
     """分批次训练"""
