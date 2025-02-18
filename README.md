@@ -29,4 +29,4 @@ generation RNA aptamers should follow this code
    python generation.py 1 --cuda 0 --input_file your_sample_aptamers.txt
    --output_file your_output_file.txt --model_name your_model_name.model --num 1000
 ```
-The format of sample_aptamers.txt should be same as training file ,and the num is generating the number of aptamers seq.
+The generation of Grape need sample RNA aptamers. And the format of sample_aptamers.txt should be same as training file ,and the num is generating the number of aptamers seq.
