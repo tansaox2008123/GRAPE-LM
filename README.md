@@ -17,3 +17,16 @@ And we need another environment with RNA-FM to get the RNA embedding to training
 https://github.com/ml4bio/RNA-FM, and follow the details to get the RNA-fm environment.
 
 ## Quickstart
+Train your own model should follow this code
+```bash
+   python train_AE.py  1 --cuda 0 --train_file your_train_file.txt --test_file your_test_file.txt --batch_size 1000
+```
+Numbers 1, 2, and 3 represent training the model using RNA-FM, EVO, and without using an LLM model, respectively.
+The training file format can be referenced from the dateset following file.
+
+generation RNA aptamers should follow this code
+```bash
+   python generation.py 1 --cuda 0 --input_file your_sample_aptamers.txt
+   --output_file your_output_file.txt --model_name your_model_name.model --num 1000
+```
+The generation of Grape need sample RNA aptamers. And the format of sample_aptamers.txt should be same as training file ,and the num is generating the number of aptamers seq.
