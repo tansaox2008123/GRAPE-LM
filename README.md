@@ -33,6 +33,7 @@ The generation of Grape need sample RNA aptamers. And the format of sample_aptam
 
 ## Refernce
 ```bash
+   RNA-FM
    @article{shen2024accurate,
   title={Accurate RNA 3D structure prediction using a language model-based deep learning approach},
   author={Shen, Tao and Hu, Zhihang and Sun, Siqi and Liu, Di and Wong, Felix and Wang, Jiuming and Chen, Jiayang and Wang, Yixuan and Hong, Liang and Xiao, Jin and others},
@@ -41,7 +42,7 @@ The generation of Grape need sample RNA aptamers. And the format of sample_aptam
   year={2024},
   publisher={Nature Publishing Group US New York}
 }
-
+   Evo
    @article{nguyen2024sequence,
    author = {Eric Nguyen and Michael Poli and Matthew G. Durrant and Brian Kang and Dhruva Katrekar and David B. Li and Liam J. Bartie and Armin W. Thomas and Samuel H. King and Garyk Brixi and Jeremy Sullivan and Madelena Y. Ng and Ashley Lewis and Aaron Lou and Stefano Ermon and Stephen A. Baccus and Tina Hernandez-Boussard and Christopher Ré and Patrick D. Hsu and Brian L. Hie },
    title = {Sequence modeling and design from molecular to genome scale with Evo},
