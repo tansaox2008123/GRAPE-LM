@@ -308,7 +308,7 @@ def generation_AE_rna_fm(input_file, output_file, model_name, num):
         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
         random_seq = greedy_decode_llm(model, random_rna_inputs, 20, 0, True)
         random_rnas.append(random_seq)
-        print("使用greedy_decode生成的随机采用生成序列：" + str(random_seq))
+        print("Using greedy_decode generate random RNA aptamers seqs：" + str(random_seq))
 
     with open(output_file, 'w') as file2:
         for line in random_rnas:
@@ -334,7 +334,7 @@ def generation_AE_evo(input_file, output_file, model_name, num):
         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
         random_seq = greedy_decode_llm(model, random_rna_inputs, 20, 0, True)
         random_rnas.append(random_seq)
-        print("使用greedy_decode生成的随机采用生成序列：" + str(random_seq))
+        print("Using greedy_decode generate random RNA aptamers seqs：" + str(random_seq))
 
     with open(output_file, 'w') as file2:
         for line in random_rnas:
@@ -361,7 +361,7 @@ def generation_AE_wollm(input_file, output_file, model_name, num):
         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
         random_seq2 = greedy_decode_wollm(model, random_rna_inputs, 20, 0, False)
         random_rnas.append(random_seq2)
-        print("使用greedy_decode生成的随机采用生成序列：" + str(random_seq2))
+        print("Using greedy_decode generate random RNA aptamers seqs：" + str(random_seq2))
 
     with open(output_file, 'w') as file2:
         for line in random_rnas:
@@ -387,7 +387,7 @@ def generation_CAE_womlp(input_file, output_file, model_name, num):
         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
         random_seq = greedy_decode_ex_MLP(model, random_rna_inputs, 20, 0, True)
         random_rnas.append(random_seq)
-        print("使用greedy_decode生成的随机采用生成序列：" + str(random_seq))
+        print("Using greedy_decode generate random RNA aptamers seqs：" + str(random_seq))
 
 
     with open(output_file, 'w') as file2:
