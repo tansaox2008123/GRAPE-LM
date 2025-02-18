@@ -30,3 +30,28 @@ generation RNA aptamers should follow this code
    --output_file your_output_file.txt --model_name your_model_name.model --num 1000
 ```
 The generation of Grape need sample RNA aptamers. And the format of sample_aptamers.txt should be same as training file ,and the num is generating the number of aptamers seq.
+
+## Refernce
+```bash
+   @article{shen2024accurate,
+  title={Accurate RNA 3D structure prediction using a language model-based deep learning approach},
+  author={Shen, Tao and Hu, Zhihang and Sun, Siqi and Liu, Di and Wong, Felix and Wang, Jiuming and Chen, Jiayang and Wang, Yixuan and Hong, Liang and Xiao, Jin and others},
+  journal={Nature Methods},
+  pages={1--12},
+  year={2024},
+  publisher={Nature Publishing Group US New York}
+}
+
+   @article{nguyen2024sequence,
+   author = {Eric Nguyen and Michael Poli and Matthew G. Durrant and Brian Kang and Dhruva Katrekar and David B. Li and Liam J. Bartie and Armin W. Thomas and Samuel H. King and Garyk Brixi and Jeremy Sullivan and Madelena Y. Ng and Ashley Lewis and Aaron Lou and Stefano Ermon and Stephen A. Baccus and Tina Hernandez-Boussard and Christopher Ré and Patrick D. Hsu and Brian L. Hie },
+   title = {Sequence modeling and design from molecular to genome scale with Evo},
+   journal = {Science},
+   volume = {386},
+   number = {6723},
+   pages = {eado9336},
+   year = {2024},
+   doi = {10.1126/science.ado9336},
+   URL = {https://www.science.org/doi/abs/10.1126/science.ado9336},
+}
+```
+
