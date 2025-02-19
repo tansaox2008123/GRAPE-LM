@@ -13,8 +13,15 @@ First,download the repository and create the environment.
    git clone https://github.com/tansaox2008123/Grape.git
    conda env create -f environment.yml
 ```
-And we need another environment with RNA-FM to get the RNA embedding to training new model you need go to 
-https://github.com/ml4bio/RNA-FM, and follow the details to get the RNA-fm environment.
+And you need to correctly fill in your IP address in train_with_guidance.py to load Evo model to get embedding.
+Like following.
+```bash
+os.environ["http_proxy"] = "http://172.31.179.68:6666"
+os.environ["https_proxy"] = "http://172.31.179.68:6666"
+```
+And you can get more details in these websites
+RNA-FM https://github.com/ml4bio/RNA-FM.
+Evo https://github.com/evo-design/evo
 
 ## Quickstart
 Train your own model should follow this code
