@@ -2,11 +2,52 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 # -*- coding: utf-8 -*-
-
+import os
 import torch
 import torch.nn as nn
 import numpy as np
 import math
+
+import fm
+from evo import Evo
+
+
+os.environ['CUDA_VISIBLE_DEVICES'] = '6'
+
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+else:
+    device = torch.device("cpu")
+
+base_dict = {1: 'A', 2: 'C', 3: 'G', 4: 'U'}
+
+
+def decode_rna_sequences(one_hot_vectors):
+    sequences = []
+    for row in one_hot_vectors:
+        sequence = ''.join([base_dict[int(num)] for num in row.cpu().numpy()])
+        sequences.append(sequence)
+    return sequences
+
+
+def rna_seq_embbding(OriginSeq, batch_converter, EmbeddingModel):
+    EmbeddingModel = EmbeddingModel.to(device)
+    batch_labels, batch_strs, batch_tokens = batch_converter(OriginSeq)
+    batch_tokens = batch_tokens.to(device)
+
+    tmp = []
+
+    with torch.no_grad():
+        results = EmbeddingModel(batch_tokens, repr_layers=[12])
+    token_embeddings = results["representations"][12]
+
+    return token_embeddings
+
+
+def standardization_2(data):
+    mu = torch.mean(data, dim=0)
+    sigma = torch.std(data, dim=0)
+    return (data - mu) / (sigma + 1e-5)
 
 
 def get_attention_pad_mask(seq_q, seq_k):
@@ -14,6 +55,7 @@ def get_attention_pad_mask(seq_q, seq_k):
     batch_size, len_k = seq_k.size()
     pad_attn_mask = seq_k.data.eq(-1).unsqueeze(1)
     return pad_attn_mask.expand(batch_size, len_q, len_k)
+
 
 def get_attention_pad_mask_v2(seq_q):
     batch_size, len_q = seq_q.size()
@@ -25,6 +67,7 @@ def get_attention_pad_mask_v2(seq_q):
 def get_attn_subsequent_mask(seq):
     subsequence_mask = torch.triu(torch.ones(seq.size(0), seq.size(1), seq.size(1)), 1).byte().cuda()  # 生成一个上三角矩阵
     return subsequence_mask
+
 
 class ScaledDotProductAttention(nn.Module):
     def __init__(self, d_k):
@@ -120,37 +163,6 @@ class Encoder(nn.Module):
         return outputs
 
 
-class Predictor(nn.Module):
-    def __init__(self, hidd_feat_dim, model_dim, dropout):
-        super(Predictor, self).__init__()
-
-        self.clf = nn.Sequential(nn.Dropout(2.0 * dropout),
-                                 nn.Linear(hidd_feat_dim, model_dim),
-                                 nn.ReLU(),
-                                 nn.Dropout(2.0 * dropout),
-                                 nn.Linear(model_dim, 1))
-
-    def forward(self, inputs):
-        outputs = self.clf(inputs)
-        return outputs
-
-
-class SimpleDecoder(nn.Module):
-    def __init__(self, hidd_feat_dim, model_dim):
-        super(SimpleDecoder, self).__init__()
-        self.dense = nn.Sequential(nn.Linear(hidd_feat_dim, model_dim),
-                                   nn.ReLU(),
-                                   nn.Linear(hidd_feat_dim, model_dim),
-                                   nn.ReLU(),
-                                   nn.Linear(hidd_feat_dim, 100))
-
-    def forward(self, inputs):
-        output = self.dense(inputs)
-        output = output.view(-1, 20, 5)
-
-        return output
-
-
 class DecoderLayer(nn.Module):
     def __init__(self, d_model, d_ff, d_k, d_v, n_heads):
         super(DecoderLayer, self).__init__()
@@ -197,8 +209,20 @@ class DecoderVAE(nn.Module):
 
 
 class Full_VAE_Model(nn.Module):
-    def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, latent_dim, dropout):
+    def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, latent_dim, dropout, CUDA):
+
+        # os.environ["CUDA_VISIBLE_DEVICES"] = CUDA
+
+        EmbeddingModel, alphabet = fm.pretrained.rna_fm_t12()
+        batch_converter = alphabet.get_batch_converter()
+        EmbeddingModel.to(device)
+        EmbeddingModel.eval()
+
         super(Full_VAE_Model, self).__init__()
+        self.batch_converter = batch_converter
+
+        self.EmbeddingModel = EmbeddingModel
+
         self.encoder = EncoderVAE(input_dim=input_dim,
                                   model_dim=model_dim,
                                   latent_dim=latent_dim,
@@ -218,7 +242,17 @@ class Full_VAE_Model(nn.Module):
         self.latent_dim = latent_dim
 
     def forward(self, rna_emds, rna_seq):
-        mean, log_var = self.encoder(rna_emds)
+        rna_seqs = decode_rna_sequences(rna_emds)
+        data = [(f"RNA{i + 1}", seq) for i, seq in enumerate(rna_seqs)]
+
+        rna_fm = rna_seq_embbding(data, self.batch_converter, self.EmbeddingModel)
+        rna_fm_2 = rna_fm[:, 1:-1, :]
+
+        rna_fm_reshaped = rna_fm_2.reshape(rna_fm_2.size(0), -1)
+        rna_fm_standardized = standardization_2(rna_fm_reshaped)
+
+
+        mean, log_var = self.encoder(rna_fm_standardized)
 
         std = torch.exp(0.5 * log_var)
         eps = torch.randn_like(std)

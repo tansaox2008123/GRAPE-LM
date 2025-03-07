@@ -21,7 +21,7 @@ import argparse
 
 sys.path.append(os.path.abspath(''))
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '4'
+os.environ['CUDA_VISIBLE_DEVICES'] = '6'
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -91,7 +91,7 @@ def get_rna_fm_model():
 
 
 
-def read_data_vae(file_path, EmbbingModel, batch_converter):
+def read_data_vae(file_path):
     with open(file_path, 'r') as file:
         lines = file.readlines()
 
@@ -115,20 +115,20 @@ def read_data_vae(file_path, EmbbingModel, batch_converter):
         decimal_part = float(words[0])
         decimal_part = sigmoid(decimal_part, 0.05)
 
-        seq = ("undefined", b)
-        seq_unused = ('UNUSE', 'ACGU')
-        all_rna = []
-        all_rna.append(seq)
-        all_rna.append(seq_unused)
+        # seq = ("undefined", b)
+        # seq_unused = ('UNUSE', 'ACGU')
+        # all_rna = []
+        # all_rna.append(seq)
+        # all_rna.append(seq_unused)
+        #
+        # rna_fm = rna_seq_embbding(all_rna, batch_converter, EmbbingModel)
+        # rna_fm = rna_fm[1:-1, :]
+        # rna_fm = rna_fm.cpu().numpy()
+        #
+        # rna_fm = rna_fm.reshape(-1)
+        # rna_fm = standardization(rna_fm)
 
-        rna_fm = rna_seq_embbding(all_rna, batch_converter, EmbbingModel)
-        rna_fm = rna_fm[1:-1, :]
-        rna_fm = rna_fm.cpu().numpy()
-
-        rna_fm = rna_fm.reshape(-1)
-        rna_fm = standardization(rna_fm)
-
-        rnas.append(rna_fm)
+        rnas.append(true_seq)
         input_seqs.append(input_seq)
         true_seqs.append(true_seq)
         bd_scores.append(decimal_part)
@@ -138,8 +138,9 @@ def read_data_vae(file_path, EmbbingModel, batch_converter):
 
 # 处理等长序列
 def get_data_vae(file_path, is_batch=False):
-    EmbbingModel, batch_converter = get_rna_fm_model()
-    rnas, input_seqs, true_seqs, bd_scores = read_data_vae(file_path, EmbbingModel, batch_converter)
+    # EmbbingModel, batch_converter = get_rna_fm_model()
+
+    rnas, input_seqs, true_seqs, bd_scores = read_data_vae(file_path)
 
     if is_batch:
         rnas1 = torch.tensor(rnas)
@@ -167,7 +168,7 @@ class Myloss(nn.Module):
         return loss
 
 
-def train_VAE(train_file, test_file, batch_size):
+def train_VAE(train_file, test_file, model_name, batch_size, CUDA):
     tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores = get_data_vae(train_file, is_batch=True)
     te_feats, te_input_seqs, te_true_seqs, te_bd_scores = get_data_vae(test_file, is_batch=True)
 
@@ -187,15 +188,16 @@ def train_VAE(train_file, test_file, batch_size):
                              pin_memory=True,
                              drop_last=False)
 
-    model = Full_VAE_Model(input_dim=12800,  # 输入特征的维度
-                           model_dim=128,  # LLM适配器（Encoder）隐含层的大小, Transformer模型维度
-                           tgt_size=5,  # 碱基种类数
-                           n_declayers=2,  # Transformer解码器层数
-                           d_ff=128,  # Transformer前馈网络隐含层维度
+    model = Full_VAE_Model(input_dim=12800,
+                           model_dim=128,
+                           tgt_size=5,
+                           n_declayers=2,
+                           d_ff=128,
                            d_k_v=64,
-                           n_heads=2,  # Transformer注意力头数
+                           n_heads=2,
                            latent_dim=128,
-                           dropout=0.05)
+                           dropout=0.05,
+                           CUDA=CUDA)
 
     model = model.to(device)
 
@@ -203,7 +205,7 @@ def train_VAE(train_file, test_file, batch_size):
     loss_func2 = nn.CrossEntropyLoss(ignore_index=0)
     w = 0.15
 
-    model_name = 'round1-sample1-ex-apt-VAE'
+    # model_name = model_name
     fw = open('log/' + model_name + '_training_log.txt', 'w')
 
     """分批次训练"""
@@ -311,17 +313,21 @@ def main():
     parser.add_argument('--cuda', type=str, default="0", help="CUDA device ID (e.g., '0', '1', '2')")
     parser.add_argument('--train_file', type=str)
     parser.add_argument('--test_file', type=str)
+    parser.add_argument('--model_name', type=str)
     parser.add_argument('--batch_size', type=int, default="1000")
 
 
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda
+
+    CUDA = args.cuda
     train_file = args.train_file
     test_file = args.test_file
+    model_name = args.model_name
     batch_size = args.batch_size
     # 根据参数选择函数
     if args.function == '1':
-        train_VAE(train_file, test_file, batch_size)
+        train_VAE(train_file, test_file, model_name, batch_size,CUDA)
 
 
 
