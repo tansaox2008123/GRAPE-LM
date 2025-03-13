@@ -249,7 +249,7 @@ class Full_without_guidance_Model(nn.Module):
         rna_fm = rna_seq_embbding(data, self.batch_converter, self.EmbeddingModel, self.device)
         rna_fm_2 = rna_fm[:, 1:-1, :]
 
-        rna_fm_reshaped = torch.mean(rna_fm_2, dim=1)  # 沿着行（dim=0）取平均
+        rna_fm_reshaped = torch.mean(rna_fm_2, dim=1) 
 
         rna_fm_standardized = standardization_2(rna_fm_reshaped)
 
