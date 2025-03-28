@@ -3,44 +3,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import math
-import fm
-import os
 
-
-base_dict = {1: 'A', 2: 'C', 3: 'G', 4: 'U'}
-
-def decode_rna_sequences(one_hot_vectors):
-    sequences = []
-    for row in one_hot_vectors:
-        sequence = ''.join([base_dict[int(num)] for num in row.cpu().numpy()])
-        sequences.append(sequence)
-    return sequences
-
-
-def rna_seq_embbding(OriginSeq, batch_converter, EmbeddingModel, device):
-    EmbeddingModel = EmbeddingModel.to(device)
-    batch_labels, batch_strs, batch_tokens = batch_converter(OriginSeq)
-    batch_tokens = batch_tokens.to(device)
-
-    tmp = []
-
-    with torch.no_grad():
-        results = EmbeddingModel(batch_tokens, repr_layers=[12])
-    token_embeddings = results["representations"][12]
-
-    return token_embeddings
-
-
-def standardization(data):
-    mu = np.mean(data, axis=0)
-    sigma = np.std(data, axis=0)
-    return (data - mu) / sigma
-
-
-def standardization_2(data):
-    mu = torch.mean(data, dim=0)
-    sigma = torch.std(data, dim=0)
-    return (data - mu) / (sigma + 1e-5)
 
 def get_attention_pad_mask(seq_q, seq_k):
     batch_size, len_q = seq_q.size()
@@ -212,21 +175,8 @@ class Generator(nn.Module):
 
 
 class Full_without_guidance_Model(nn.Module):
-    def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout, CUDA, device):
-
-        EmbeddingModel, alphabet = fm.pretrained.rna_fm_t12()
-        batch_converter = alphabet.get_batch_converter()
-        EmbeddingModel.to(device)
-        EmbeddingModel.eval()
-
+    def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout):
         super(Full_without_guidance_Model, self).__init__()
-
-        self.batch_converter = batch_converter
-
-        self.EmbeddingModel = EmbeddingModel
-
-        self.device = device
-
         self.encoder = Encoder(embed_dim=input_dim,
                                model_dim=model_dim,
                                dropout=dropout)
@@ -242,20 +192,7 @@ class Full_without_guidance_Model(nn.Module):
         self.generator = Generator(model_dim, vocab=tgt_size)
 
     def forward(self, rna_emds, rna_seq):
-
-        rna_seqs = decode_rna_sequences(rna_emds)
-        data = [(f"RNA{i + 1}", seq) for i, seq in enumerate(rna_seqs)]
-
-        rna_fm = rna_seq_embbding(data, self.batch_converter, self.EmbeddingModel, self.device)
-        rna_fm_2 = rna_fm[:, 1:-1, :]
-
-        rna_fm_reshaped = torch.mean(rna_fm_2, dim=1) 
-
-        rna_fm_standardized = standardization_2(rna_fm_reshaped)
-
-
-
-        dec_outputs, _, _ = self.decoder(rna_seq, rna_fm_standardized)
+        dec_outputs, _, _ = self.decoder(rna_seq, rna_emds)
         pred_seq = self.generator(dec_outputs)
 
         return pred_seq
