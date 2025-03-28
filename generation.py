@@ -11,17 +11,12 @@ import argparse
 from evo import Evo
 
 from model_with_guidance import *
-from model_without_guidance import *
 
-# os.environ['CUDA_VISIBLE_DEVICES'] = '7'
-#
-# if torch.cuda.is_available():
-#     device = torch.device("cuda")
-# else:
-#     device = torch.device("cpu")
+# os.environ["http_proxy"] = "http://...:"
+# os.environ["https_proxy"] = "http://...:"
 
 
-def greedy_decode_guidance_without_llm(model, input_src, max_len, start_symbol, device, is_noise=False):
+def greedy_decode_guidance_without_llm(model, input_src, max_len, start_symbol, is_noise, device):
     if is_noise:
         input_src = add_gaussian_noise(input_src, device, mean=0.0, std=0.1)
     memory = model.encoder(input_src)
@@ -37,9 +32,9 @@ def greedy_decode_guidance_without_llm(model, input_src, max_len, start_symbol, 
     return ys
 
 
-def greedy_decode_without_guidance(model, input_src, max_len, start_symbol, device,is_noise=True):
+def greedy_decode_without_guidance(model, input_src, max_len, start_symbol, is_noise, device):
     if is_noise:
-        input_src = add_gaussian_noise(input_src, device=device, mean=0.0, std=0.1)
+        input_src = add_gaussian_noise(input_src, device, mean=0.0, std=0.1)
     ys = torch.ones(1, 1).fill_(start_symbol).type_as(input_src.data).long()
     for i in range(max_len):
         out = model.decoder(ys, input_src)
@@ -52,12 +47,11 @@ def greedy_decode_without_guidance(model, input_src, max_len, start_symbol, devi
     return ys
 
 
-
 # GRAPE generation method
-def greedy_decode_guidance(model, input_src, max_len, start_symbol, device,is_noise=True):
+def greedy_decode_guidance(model, input_src, max_len, start_symbol, is_noise, device):
     if is_noise:
-        input_src = add_gaussian_noise(input_src, device=device,mean=0.0, std=0.1)
-    memory = model.encoder(input_src)
+        input_src = add_gaussian_noise(input_src, device, mean=0.0, std=0.1)
+    memory = model.adapter(input_src)
     ys = torch.ones(1, 1).fill_(start_symbol).type_as(input_src.data).long()
     for i in range(max_len):
         out = model.decoder(ys, memory)
@@ -68,23 +62,6 @@ def greedy_decode_guidance(model, input_src, max_len, start_symbol, device,is_no
         ys = torch.cat([ys,
                         torch.ones(1, 1).type_as(input_src.data).fill_(next_word)], dim=1).long()
     return ys
-
-
-def greedy_VAE(model, device):
-    z = torch.randn(1, 128).to(device)
-    ys = torch.ones(1, 1).fill_(0).type_as(z.data).long().to(device)
-
-    for i in range(20):
-
-        out = model.decoder(ys, z)
-        selected_tensor = out[0]
-        prob = model.generator(selected_tensor[:, -1])
-        _, next_word = torch.max(prob, dim=1)
-        next_word = next_word.item()
-        ys = torch.cat([ys,
-                        torch.ones(1, 1).type_as(z).fill_(next_word)], dim=1).long()
-
-    return ys,
 
 
 def add_gaussian_noise(tensor, device, mean=0.0, std=1.0):
@@ -108,6 +85,7 @@ def convert_to_rna_sequence_rna_fm(data):
 
     return numbers
 
+
 def get_rna_fm_model(device):
     torch.cuda.empty_cache()
 
@@ -123,7 +101,7 @@ def get_evo_model():
     evo_model = Evo('evo-1-8k-base')
     model, tokenizer = evo_model.model, evo_model.tokenizer
 
-    return model,tokenizer
+    return model, tokenizer
 
 
 def rna_seq_embbding(OriginSeq, batch_converter, EmbeddingModel, device):
@@ -136,8 +114,6 @@ def rna_seq_embbding(OriginSeq, batch_converter, EmbeddingModel, device):
     token_embeddings = results["representations"][12][0]
 
     return token_embeddings
-
-
 
 
 def get_rna_fm_embedding(seq, batch_converter, EmbbingModel, device):
@@ -174,19 +150,18 @@ def get_evo_embedding(seq, model, tokenizer, device):
     return rna_evo
 
 
-def get_sample_AE_rna_fm(low, high ,num, input_file, device):
+def get_sample_AE_rna_fm(low, high, num, input_file, device):
     EmbbingModel, batch_converter = get_rna_fm_model(device)
-    with open(input_file,'r') as file:
+    with open(input_file, 'r') as file:
         lines = file.readlines()
-
 
     rnas = []
     for _ in range(num):
         i = random.randint(low, high)
         j = random.randint(low, high)
 
-        line_1 =lines[i].split()[-1]
-        line_2 =lines[j].split()[-1]
+        line_1 = lines[i].split()[-1]
+        line_2 = lines[j].split()[-1]
 
         rna_fm1 = get_rna_fm_embedding(line_1, batch_converter, EmbbingModel, device)
         rna_fm2 = get_rna_fm_embedding(line_2, batch_converter, EmbbingModel, device)
@@ -201,14 +176,12 @@ def get_sample_AE_rna_fm(low, high ,num, input_file, device):
     return rnas
 
 
-
-def get_sample_AE_evo(low, high ,num, input_file, device):
+def get_sample_AE_evo(low, high, num, input_file, device):
     model, tokenizer = get_evo_model()
     model.to(device)
     model.eval()
 
-
-    with open(input_file,'r') as file:
+    with open(input_file, 'r') as file:
         lines = file.readlines()
 
     rnas = []
@@ -216,8 +189,8 @@ def get_sample_AE_evo(low, high ,num, input_file, device):
         i = random.randint(low, high)
         j = random.randint(low, high)
 
-        line_1 =lines[i].split()[-1]
-        line_2 =lines[j].split()[-1]
+        line_1 = lines[i].split()[-1]
+        line_2 = lines[j].split()[-1]
 
         rna_fm1 = get_evo_embedding(line_1, model, tokenizer, device)
         rna_fm2 = get_evo_embedding(line_2, model, tokenizer, device)
@@ -232,7 +205,7 @@ def get_sample_AE_evo(low, high ,num, input_file, device):
     return rnas
 
 
-def get_sample_AE_wollm(low, high ,num, input_file, device):
+def get_sample_AE_wollm(low, high, num, input_file, device):
     with open(input_file, 'r') as file:
         lines = file.readlines()
     rnas = []
@@ -259,21 +232,19 @@ def get_sample_AE_wollm(low, high ,num, input_file, device):
     return rnas
 
 
-
-def get_sample_without_guidance(low, high ,num, input_file, device):
+def get_sample_without_guidance(low, high, num, input_file, device):
     EmbbingModel, batch_converter = get_rna_fm_model(device)
 
     with open(input_file, 'r') as file:
         lines = file.readlines()
     rnas = []
 
-
     for _ in range(num):
         i = random.randint(low, high)
         j = random.randint(low, high)
 
-        line_1 =lines[i].split()[-1]
-        line_2 =lines[j].split()[-1]
+        line_1 = lines[i].split()[-1]
+        line_2 = lines[j].split()[-1]
 
         rna_fm1 = get_rna_fm_embedding(line_1, batch_converter, EmbbingModel, device)
         rna_fm2 = get_rna_fm_embedding(line_2, batch_converter, EmbbingModel, device)
@@ -289,7 +260,7 @@ def get_sample_without_guidance(low, high ,num, input_file, device):
 
 
 def generation_guidance_rna_fm(input_file, output_file, model_name, num, device):
-    model_name_2=f'model/{model_name}'
+    model_name_2 = f'model/{model_name}'
 
     model = torch.load(model_name_2)
     model.eval()
@@ -301,10 +272,10 @@ def generation_guidance_rna_fm(input_file, output_file, model_name, num, device)
 
     random_rnas = []
 
-    rnas = get_sample_AE_rna_fm(0, num_lines-1, num, input_file, device)
+    rnas = get_sample_AE_rna_fm(0, num_lines - 1, num, input_file, device)
     for rna_input in rnas:
         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
-        random_seq = greedy_decode_guidance(model, random_rna_inputs, 20, 0, True)
+        random_seq = greedy_decode_guidance(model, random_rna_inputs, 20, 0, True, device)
         random_rnas.append(random_seq)
         print("Using greedy_decode generate random RNA aptamers seqs：" + str(random_seq))
 
@@ -314,7 +285,7 @@ def generation_guidance_rna_fm(input_file, output_file, model_name, num, device)
 
 
 def generation_guidance_evo(input_file, output_file, model_name, num, device):
-    model_name_2=f'model/{model_name}'
+    model_name_2 = f'model/{model_name}'
 
     model = torch.load(model_name_2)
     model.eval()
@@ -329,7 +300,7 @@ def generation_guidance_evo(input_file, output_file, model_name, num, device):
     rnas = get_sample_AE_evo(0, num_lines - 1, num, input_file, device)
     for rna_input in rnas:
         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
-        random_seq = greedy_decode_guidance(model, random_rna_inputs, 20, 0, True)
+        random_seq = greedy_decode_guidance(model, random_rna_inputs, 20, 0, True, device)
         random_rnas.append(random_seq)
         print("Using greedy_decode generate random RNA aptamers seqs：" + str(random_seq))
 
@@ -338,9 +309,8 @@ def generation_guidance_evo(input_file, output_file, model_name, num, device):
             file2.write(str(line) + '\n')
 
 
-
 def generation_guidance_without_llm(input_file, output_file, model_name, num, device):
-    model_name_2=f'model/{model_name}'
+    model_name_2 = f'model/{model_name}'
 
     model = torch.load(model_name_2)
     model.eval()
@@ -352,11 +322,11 @@ def generation_guidance_without_llm(input_file, output_file, model_name, num, de
 
     random_rnas = []
 
-    rnas = get_sample_AE_wollm(0, num_lines-1, num, input_file, device)
+    rnas = get_sample_AE_wollm(0, num_lines - 1, num, input_file, device)
 
     for rna_input in rnas:
         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
-        random_seq2 = greedy_decode_guidance_without_llm(model, random_rna_inputs, 20, 0, False)
+        random_seq2 = greedy_decode_guidance_without_llm(model, random_rna_inputs, 20, 0, False, device)
         random_rnas.append(random_seq2)
         print("Using greedy_decode generate random RNA aptamers seqs：" + str(random_seq2))
 
@@ -366,7 +336,7 @@ def generation_guidance_without_llm(input_file, output_file, model_name, num, de
 
 
 def generation_without_guidance(input_file, output_file, model_name, num, device):
-    model_name_2=f'model/{model_name}'
+    model_name_2 = f'model/{model_name}'
 
     model = torch.load(model_name_2)
     model.eval()
@@ -382,35 +352,13 @@ def generation_without_guidance(input_file, output_file, model_name, num, device
 
     for rna_input in rnas:
         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
-        random_seq = greedy_decode_without_guidance(model, random_rna_inputs, 20, 0, True)
+        random_seq = greedy_decode_without_guidance(model, random_rna_inputs, 20, 0, True, device)
         random_rnas.append(random_seq)
         print("Using greedy_decode generate random RNA aptamers seqs：" + str(random_seq))
 
     with open(output_file, 'w') as file2:
         for line in random_rnas:
             file2.write(str(line) + '\n')
-
-
-def generation_VAE(input_file, output_file, model_name, num, device):
-    model_name_2=f'model/{model_name}'
-
-    model = torch.load(model_name_2)
-    model.eval()
-    model = model.to(device)
-
-
-    random_rnas = []
-
-    for i in range(num):
-        random_seq2 = greedy_VAE(model, device)
-        print(random_seq2)
-        random_rnas.append(random_seq2)
-
-
-    with open(output_file, 'w') as file2:
-        for line in random_rnas:
-            file2.write(str(line) + '\n')
-
 
 
 def main():
@@ -436,46 +384,32 @@ def main():
     else:
         device = torch.device("cpu")
 
-
     # 根据参数选择函数
     if args.function == '1':
         generation_guidance_rna_fm(input_file,
+                                   output_file,
+                                   model_name,
+                                   num,
+                                   device)
+    elif args.function == '2':
+        generation_guidance_evo(input_file,
+                                output_file,
+                                model_name,
+                                num,
+                                device)
+    elif args.function == '3':
+        generation_guidance_without_llm(input_file,
                                         output_file,
                                         model_name,
                                         num,
                                         device)
-    elif args.function == '2':
-        generation_guidance_evo(input_file,
-                                     output_file,
-                                     model_name,
-                                     num,
-                                     device)
-    elif args.function == '3':
-        generation_guidance_without_llm(input_file,
-                            output_file,
-                            model_name,
-                            num,
-                            device)
     elif args.function == '4':
         generation_without_guidance(input_file,
-                             output_file,
-                             model_name,
-                             num,
-                             device)
-    elif args.function == '5':
-        generation_VAE(input_file,
-                       output_file,
-                       model_name,
-                       num,
-                       device)
+                                    output_file,
+                                    model_name,
+                                    num,
+                                    device)
+
 
 if __name__ == '__main__':
     main()
-
-
-
-
-
-
-
-
