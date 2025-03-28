@@ -15,6 +15,9 @@ import argparse
 
 sys.path.append(os.path.abspath(''))
 
+# os.environ["http_proxy"] = "http://...:10809"
+# os.environ["https_proxy"] = "http://...:10809"
+
 
 def sigmoid(x, k=0.05):
     return 1 / (1 + np.exp(-k * x))
@@ -42,7 +45,7 @@ def convert_to_rna_sequence_evo(data):
     return rna_sequence
 
 
-def read_data_rna_fm(file_path):
+def read_data_rna_fm(file_path, EmbbingModel, batch_converter, device):
     with open(file_path, 'r') as file:
         lines = file.readlines()
 
@@ -66,21 +69,20 @@ def read_data_rna_fm(file_path):
         decimal_part = float(words[0])
         decimal_part = (sigmoid(decimal_part, 0.05) - 0.5) * 2.0
 
+        seq = ("undefined", b)
+        seq_unused = ('UNUSE', 'ACGU')
+        all_rna = []
+        all_rna.append(seq)
+        all_rna.append(seq_unused)
 
-        # seq = ("undefined", b)
-        # seq_unused = ('UNUSE', 'ACGU')
-        # all_rna = []
-        # all_rna.append(seq)
-        # all_rna.append(seq_unused)
-        #
-        # rna_fm = rna_seq_embbding(all_rna, batch_converter, EmbbingModel)
-        # rna_fm = rna_fm[1:-1, :]
-        # rna_fm = rna_fm.cpu().numpy()
-        #
-        # rna_fm = rna_fm.reshape(-1)
-        # rna_fm = standardization(rna_fm)
+        rna_fm = rna_seq_embbding(all_rna, batch_converter, EmbbingModel, device)
+        rna_fm = rna_fm[1:-1, :]
+        rna_fm = rna_fm.cpu().numpy()
 
-        rnas.append(true_seq)
+        rna_fm = rna_fm.reshape(-1)
+        rna_fm = standardization(rna_fm)
+
+        rnas.append(rna_fm)
         input_seqs.append(input_seq)
         true_seqs.append(true_seq)
         bd_scores.append(decimal_part)
@@ -88,10 +90,9 @@ def read_data_rna_fm(file_path):
 
 
 def get_data_rna_fm(file_path, is_batch, device):
+    EmbbingModel, batch_converter = get_rna_fm_model(device)
 
-    # EmbbingModel, batch_converter = get_rna_fm_model()
-
-    rnas, input_seqs, true_seqs, bd_scores = read_data_rna_fm(file_path)
+    rnas, input_seqs, true_seqs, bd_scores = read_data_rna_fm(file_path, EmbbingModel, batch_converter, device)
 
     if is_batch:
         rnas1 = torch.tensor(rnas)
@@ -107,7 +108,7 @@ def get_data_rna_fm(file_path, is_batch, device):
     return rnas1, input_seqs1, true_seqs1, bd_scores1
 
 
-def read_data_evo(file_path):
+def read_data_evo(file_path, model, tokenizer, device):
     with open(file_path, 'r') as file:
         lines = file.readlines()
 
@@ -132,26 +133,26 @@ def read_data_evo(file_path):
         decimal_part = float(words[0])
         decimal_part = (sigmoid(decimal_part, 0.05) - 0.5) * 2.0
 
-        # sequence = b
-        #
-        # input_ids = torch.tensor(
-        #     tokenizer.tokenize(sequence),
-        #     dtype=torch.int,
-        # ).to(device).unsqueeze(0)
-        #
-        # with torch.no_grad():
-        #     logits, _ = model(input_ids)
-        #
-        # logits = logits.detach()
-        # logits = logits.float()
-        # cpu_logits = logits.cpu()
-        #
-        # rna_fm = cpu_logits.numpy()
-        #
-        # rna_fm = rna_fm.reshape(-1)
-        # rna_fm = standardization(rna_fm)
+        sequence = b
 
-        rnas.append(true_seq)
+        input_ids = torch.tensor(
+            tokenizer.tokenize(sequence),
+            dtype=torch.int,
+        ).to(device).unsqueeze(0)
+
+        with torch.no_grad():
+            logits, _ = model(input_ids)
+
+        logits = logits.detach()
+        logits = logits.float()
+        cpu_logits = logits.cpu()
+
+        rna_embedding = cpu_logits.numpy()
+
+        rna_embedding = rna_embedding.reshape(-1)
+        rna_embedding = standardization(rna_embedding)
+
+        rnas.append(rna_embedding)
         input_seqs.append(input_seq)
         true_seqs.append(true_seq)
         bd_scores.append(decimal_part)
@@ -159,12 +160,11 @@ def read_data_evo(file_path):
 
 
 def get_data_evo(file_path, is_batch, device):
-    # evo_model = Evo('evo-1-8k-base')
-    # model, tokenizer = evo_model.model, evo_model.tokenizer
-    # model.to(device)
-    # model.eval()
-
-    rnas, input_seqs, true_seqs, bd_scores = read_data_evo(file_path)
+    evo_model = Evo('evo-1-8k-base')
+    model, tokenizer = evo_model.model, evo_model.tokenizer
+    model.to(device)
+    model.eval()
+    rnas, input_seqs, true_seqs, bd_scores = read_data_evo(file_path, model, tokenizer, device)
 
     if is_batch:
         rnas1 = torch.tensor(rnas)
@@ -205,7 +205,7 @@ def rna_seq_embbding(OriginSeq, batch_converter, EmbeddingModel, device):
     return token_embeddings
 
 
-def read_data_wollm(file_path):
+def read_data_without_LLM(file_path):
     with open(file_path, 'r') as file:
         lines = file.readlines()
 
@@ -238,8 +238,8 @@ def read_data_wollm(file_path):
     return rnas, input_seqs, true_seqs, bd_scores
 
 
-def get_data_wollm(file_path, is_batch, device):
-    rnas, input_seqs, true_seqs, bd_scores = read_data_wollm(file_path)
+def get_data_without_llm(file_path, is_batch, device):
+    rnas, input_seqs, true_seqs, bd_scores = read_data_without_LLM(file_path)
 
     if is_batch:
         rnas1 = torch.tensor(rnas, dtype=torch.float32)
@@ -255,7 +255,7 @@ def get_data_wollm(file_path, is_batch, device):
     return rnas1, input_seqs1, true_seqs1, bd_scores1
 
 
-def train_guidance_LLM_rna_fm(train_file, test_file, batch_size, model_name, cuda, device):
+def train_guidance_LLM_rna_fm(train_file, test_file, batch_size, model_name, device):
     tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores = get_data_rna_fm(train_file, is_batch=True, device=device)
     te_feats, te_input_seqs, te_true_seqs, te_bd_scores = get_data_rna_fm(test_file, is_batch=True, device=device)
 
@@ -276,22 +276,20 @@ def train_guidance_LLM_rna_fm(train_file, test_file, batch_size, model_name, cud
                              drop_last=False)
 
     model = FullModel_guidance_RNA_FM(input_dim=12800,
-                             model_dim=128,
-                             tgt_size=5,
-                             n_declayers=2,
-                             d_ff=128,
-                             d_k_v=64,
-                             n_heads=2,
-                             dropout=0.05,
-                             CUDA=cuda,
-                             device=device)
+                                      model_dim=128,
+                                      tgt_size=5,
+                                      n_declayers=2,
+                                      d_ff=128,
+                                      d_k_v=64,
+                                      n_heads=2,
+                                      dropout=0.05)
 
     model = model.to(device)
 
     loss_func1 = nn.MSELoss()
     loss_func2 = nn.CrossEntropyLoss(ignore_index=0)
 
-    w = 0.85
+    w = 0.50
 
     fw = open('log/' + model_name + '_training_log.txt', 'w')
     for epoch in range(250):
@@ -395,7 +393,7 @@ def train_guidance_LLM_rna_fm(train_file, test_file, batch_size, model_name, cud
     torch.save(model, 'model/' + model_name + '.model')
 
 
-def train_guidance_LLM_Evo(train_file, test_file, batch_size, model_name, CUDA, device):
+def train_guidance_LLM_Evo(train_file, test_file, batch_size, model_name, device):
     tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores = get_data_evo(train_file, is_batch=True, device=device)
     te_feats, te_input_seqs, te_true_seqs, te_bd_scores = get_data_evo(test_file, is_batch=True, device=device)
 
@@ -422,19 +420,17 @@ def train_guidance_LLM_Evo(train_file, test_file, batch_size, model_name, CUDA, 
                                    d_ff=128,
                                    d_k_v=64,
                                    n_heads=2,
-                                   dropout=0.05,
-                                   CUDA=CUDA,
-                                   device=device)
+                                   dropout=0.05)
 
     model = model.to(device)
 
     loss_func1 = nn.MSELoss()
     loss_func2 = nn.CrossEntropyLoss(ignore_index=0)
 
-    w = 0.50
+    w = 0.15
 
     fw = open('log/' + model_name + '_training_log.txt', 'w')
-    for epoch in range(10):
+    for epoch in range(250):
         start_t = time.time()
         loss1_value = 0.0
         loss2_value = 0.0
@@ -535,9 +531,9 @@ def train_guidance_LLM_Evo(train_file, test_file, batch_size, model_name, CUDA, 
     torch.save(model, 'model/' + model_name + '.model')
 
 
-def train_guidance_without_LLM(train_file, test_file, batch_size, model_name, CUDA, device):
-    tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores = get_data_wollm(train_file, is_batch=True, device=device)
-    te_feats, te_input_seqs, te_true_seqs, te_bd_scores = get_data_wollm(test_file, is_batch=True, device=device)
+def train_guidance_without_LLM(train_file, test_file, batch_size, model_name, device):
+    tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores = get_data_without_llm(train_file, is_batch=True, device=device)
+    te_feats, te_input_seqs, te_true_seqs, te_bd_scores = get_data_without_llm(test_file, is_batch=True, device=device)
 
     train_data = torch_data.TensorDataset(tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores)
     test_data = torch_data.TensorDataset(te_feats, te_input_seqs, te_true_seqs, te_bd_scores)
@@ -556,14 +552,13 @@ def train_guidance_without_LLM(train_file, test_file, batch_size, model_name, CU
                              drop_last=False)
 
     model = FullModel_guidance_Without_LLM(input_dim=20,
-                             model_dim=128,
-                             tgt_size=5,
-                             n_declayers=2,
-                             d_ff=128,
-                             d_k_v=64,
-                             n_heads=2,
-                             dropout=0.05,
-                             CUDA=CUDA)
+                                           model_dim=128,
+                                           tgt_size=5,
+                                           n_declayers=2,
+                                           d_ff=128,
+                                           d_k_v=64,
+                                           n_heads=2,
+                                           dropout=0.05)
 
     model = model.to(device)
 
@@ -681,11 +676,9 @@ def main():
     parser.add_argument('--model_name', type=str)
     parser.add_argument('--batch_size', type=int, default="1000")
 
-
     args = parser.parse_args()
 
     # os.environ["CUDA_VISIBLE_DEVICES"] = f'{args.cuda}'
-
 
     CUDA = args.cuda
     train_file = args.train_file
@@ -700,13 +693,12 @@ def main():
     else:
         device = torch.device("cpu")
 
-
     if args.function == '1':
-        train_guidance_LLM_rna_fm(train_file, test_file, batch_size, model_name, CUDA, device)
+        train_guidance_LLM_rna_fm(train_file, test_file, batch_size, model_name, device)
     elif args.function == '2':
-        train_guidance_LLM_Evo(train_file, test_file, batch_size, model_name, CUDA, device)
+        train_guidance_LLM_Evo(train_file, test_file, batch_size, model_name, device)
     elif args.function == '3':
-        train_guidance_without_LLM(train_file, test_file, batch_size, model_name, CUDA, device)
+        train_guidance_without_LLM(train_file, test_file, batch_size, model_name, device)
 
 
 if __name__ == '__main__':
