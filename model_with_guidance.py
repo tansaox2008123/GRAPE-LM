@@ -143,9 +143,9 @@ class PoswiseFeedForwardNet(nn.Module):
         return self.ln(output + residual)
 
 
-class Encoder(nn.Module):
+class Adapter(nn.Module):
     def __init__(self, embed_dim, model_dim, dropout):
-        super(Encoder, self).__init__()
+        super(Adapter, self).__init__()
         self.dense = nn.Sequential(nn.Linear(embed_dim, model_dim),
                                    nn.ReLU(),
                                    # nn.Linear(model_dim, model_dim),
@@ -231,22 +231,10 @@ class Generator(nn.Module):
 
 
 class FullModel_guidance_RNA_FM(nn.Module):
-    def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout, CUDA, device):
-
-        # os.environ["CUDA_VISIBLE_DEVICES"] = CUDA
-
-        EmbeddingModel, alphabet = fm.pretrained.rna_fm_t12()
-        batch_converter = alphabet.get_batch_converter()
-        EmbeddingModel.to(device)
-        EmbeddingModel.eval()
-
+    def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout):
         super(FullModel_guidance_RNA_FM, self).__init__()
 
-        self.batch_converter = batch_converter
-
-        self.EmbeddingModel = EmbeddingModel
-        self.device = device
-        self.encoder = Encoder(embed_dim=input_dim,
+        self.adapter = Adapter(embed_dim=input_dim,
                                model_dim=model_dim,
                                dropout=dropout)
 
@@ -265,16 +253,7 @@ class FullModel_guidance_RNA_FM(nn.Module):
         self.generator = Generator(model_dim, vocab=tgt_size)
 
     def forward(self, rna_emds, rna_seq):
-        rna_seqs = decode_rna_sequences(rna_emds)
-        data = [(f"RNA{i + 1}", seq) for i, seq in enumerate(rna_seqs)]
-
-        rna_fm = rna_seq_embbding(data, self.batch_converter, self.EmbeddingModel, self.device)
-        rna_fm_2 = rna_fm[:, 1:-1, :]
-
-        rna_fm_reshaped = rna_fm_2.reshape(rna_fm_2.size(0), -1)
-        rna_fm_standardized = standardization_2(rna_fm_reshaped)
-
-        hidd_feats = self.encoder(rna_fm_standardized)
+        hidd_feats = self.adapter(rna_emds)
         bind_scores = self.predictor(hidd_feats)
         dec_outputs, _, _ = self.decoder(rna_seq, hidd_feats)
         pred_seq = self.generator(dec_outputs)
@@ -283,21 +262,10 @@ class FullModel_guidance_RNA_FM(nn.Module):
 
 
 class FullModel_guidance_Evo(nn.Module):
-    def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout, CUDA, device):
-        os.environ["CUDA_VISIBLE_DEVICES"] = CUDA
-
+    def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout):
         super(FullModel_guidance_Evo, self).__init__()
 
-        evo_model = Evo('evo-1-8k-base')
-        model_evo, tokenizer = evo_model.model, evo_model.tokenizer
-        model_evo.to(device)
-        model_evo.eval()
-
-        self.tokenizer = tokenizer
-        self.model_evo = model_evo
-        self.device = device
-
-        self.encoder = Encoder(embed_dim=input_dim,
+        self.adapter = Adapter(embed_dim=input_dim,
                                model_dim=model_dim,
                                dropout=dropout)
 
@@ -316,28 +284,7 @@ class FullModel_guidance_Evo(nn.Module):
         self.generator = Generator(model_dim, vocab=tgt_size)
 
     def forward(self, rna_emds, rna_seq):
-        rna_seqs = decode_rna_sequences(rna_emds)
-
-        logits_list = []
-
-        for seq in rna_seqs:
-            input_ids = torch.tensor(
-                self.tokenizer.tokenize(seq),
-                dtype=torch.int,
-            ).to(self.device).unsqueeze(0)
-
-            with torch.no_grad():
-                logits, _ = self.model_evo(input_ids)
-
-            logits = logits.detach().float()
-            logits_list.append(logits)
-
-        logits_tensor = torch.cat(logits_list, dim=0)
-
-        rna_fm_reshaped = logits_tensor.reshape(logits_tensor.size(0), -1)
-        rna_fm_standardized = standardization_2(rna_fm_reshaped)
-
-        hidd_feats = self.encoder(rna_fm_standardized)
+        hidd_feats = self.encoder(rna_emds)
         bind_scores = self.predictor(hidd_feats)
         dec_outputs, _, _ = self.decoder(rna_seq, hidd_feats)
         pred_seq = self.generator(dec_outputs)
@@ -346,11 +293,10 @@ class FullModel_guidance_Evo(nn.Module):
 
 
 class FullModel_guidance_Without_LLM(nn.Module):
-    def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout, CUDA):
-        # os.environ["CUDA_VISIBLE_DEVICES"] = CUDA
+    def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout):
 
         super(FullModel_guidance_Without_LLM, self).__init__()
-        self.encoder = Encoder(embed_dim=input_dim,
+        self.adapter = Adapter(embed_dim=input_dim,
                                model_dim=model_dim,
                                dropout=dropout)
 
