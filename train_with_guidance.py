@@ -15,8 +15,9 @@ import argparse
 
 sys.path.append(os.path.abspath(''))
 
-# os.environ["http_proxy"] = "http://...:10809"
-# os.environ["https_proxy"] = "http://...:10809"
+#if you have any internet error please try this code with your owner ip
+# os.environ["http_proxy"] = "http://...:8888"
+# os.environ["https_proxy"] = "http://...:8888"
 
 
 def sigmoid(x, k=0.05):
@@ -413,7 +414,7 @@ def train_guidance_LLM_Evo(train_file, test_file, batch_size, model_name, device
                              pin_memory=True,
                              drop_last=False)
 
-    model = FullModel_guidance_Evo(input_dim=10240,
+    model = FullModel_guidance_Evo(input_dim=15360,
                                    model_dim=128,
                                    tgt_size=5,
                                    n_declayers=2,
@@ -430,7 +431,7 @@ def train_guidance_LLM_Evo(train_file, test_file, batch_size, model_name, device
     w = 0.15
 
     fw = open('log/' + model_name + '_training_log.txt', 'w')
-    for epoch in range(250):
+    for epoch in range(450):
         start_t = time.time()
         loss1_value = 0.0
         loss2_value = 0.0
