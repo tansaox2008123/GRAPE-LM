@@ -284,7 +284,7 @@ class FullModel_guidance_Evo(nn.Module):
         self.generator = Generator(model_dim, vocab=tgt_size)
 
     def forward(self, rna_emds, rna_seq):
-        hidd_feats = self.encoder(rna_emds)
+        hidd_feats = self.adapter(rna_emds)
         bind_scores = self.predictor(hidd_feats)
         dec_outputs, _, _ = self.decoder(rna_seq, hidd_feats)
         pred_seq = self.generator(dec_outputs)
