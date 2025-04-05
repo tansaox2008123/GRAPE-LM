@@ -103,20 +103,6 @@ class PoswiseFeedForwardNet(nn.Module):
         return self.ln(output + residual)
 
 
-class Encoder(nn.Module):
-    def __init__(self, embed_dim, model_dim, dropout):
-        super(Encoder, self).__init__()
-        self.dense = nn.Sequential(nn.Linear(embed_dim, model_dim),
-                                   nn.ReLU(),
-                                   # nn.Linear(model_dim, model_dim),
-                                   nn.BatchNorm1d(model_dim),
-                                   nn.Dropout(dropout))
-
-    def forward(self, inputs):
-        outputs = self.dense(inputs)
-        return outputs
-
-
 class Decoder(nn.Module):
     def __init__(self, tgt_size, n_layers, d_model, d_ff, d_k, d_v, n_heads, dropout):
         super(Decoder, self).__init__()
@@ -177,9 +163,6 @@ class Generator(nn.Module):
 class Full_without_guidance_Model(nn.Module):
     def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout):
         super(Full_without_guidance_Model, self).__init__()
-        self.encoder = Encoder(embed_dim=input_dim,
-                               model_dim=model_dim,
-                               dropout=dropout)
         self.decoder = Decoder(tgt_size=tgt_size,
                                n_layers=n_declayers,
                                d_model=model_dim,
