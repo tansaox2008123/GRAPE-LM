@@ -12,14 +12,14 @@ from evo import Evo
 
 from model_with_guidance import *
 
-# os.environ["http_proxy"] = "http://...:"
-# os.environ["https_proxy"] = "http://...:"
+# os.environ["http_proxy"] = "http://...:8888"
+# os.environ["https_proxy"] = "http://...:8888"
 
 
 def greedy_decode_guidance_without_llm(model, input_src, max_len, start_symbol, is_noise, device):
     if is_noise:
         input_src = add_gaussian_noise(input_src, device, mean=0.0, std=0.1)
-    memory = model.encoder(input_src)
+    memory = model.adapter(input_src)
     ys = torch.ones(1, 1).fill_(start_symbol).type_as(input_src.data).long()
     for i in range(max_len):
         out = model.decoder(ys, memory)
@@ -297,7 +297,8 @@ def generation_guidance_evo(input_file, output_file, model_name, num, device):
 
     random_rnas = []
 
-    rnas = get_sample_AE_evo(0, num_lines - 1, num, input_file, device)
+    # rnas = get_sample_AE_evo(0, num_lines - 1, num, input_file, device)
+    rnas = get_sample_AE_evo(0, num_lines, num, input_file, device)
     for rna_input in rnas:
         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
         random_seq = greedy_decode_guidance(model, random_rna_inputs, 20, 0, True, device)
