@@ -16,16 +16,7 @@ from model_without_guidance import *
 import sys
 import argparse
 
-
-
 sys.path.append(os.path.abspath(''))
-
-os.environ['CUDA_VISIBLE_DEVICES'] = '7'
-
-if torch.cuda.is_available():
-    device = torch.device("cuda")
-else:
-    device = torch.device("cpu")
 
 
 def convert_to_rna_sequence_rna_fm(data):
@@ -36,7 +27,7 @@ def convert_to_rna_sequence_rna_fm(data):
     return numbers
 
 
-def rna_seq_embbding(OriginSeq, batch_converter, EmbeddingModel):
+def rna_seq_embbding(OriginSeq, batch_converter, EmbeddingModel, device):
     EmbeddingModel = EmbeddingModel.to(device)
     batch_labels, batch_strs, batch_tokens = batch_converter(OriginSeq)
     batch_tokens = batch_tokens.to(device)
@@ -47,11 +38,10 @@ def rna_seq_embbding(OriginSeq, batch_converter, EmbeddingModel):
         results = EmbeddingModel(batch_tokens, repr_layers=[12])
     token_embeddings = results["representations"][12][0]
 
-
     return token_embeddings
 
 
-def get_rna_fm_model():
+def get_rna_fm_model(device):
     torch.cuda.empty_cache()
     EmbbingModel, alphabet = fm.pretrained.rna_fm_t12()
     batch_converter = alphabet.get_batch_converter()
@@ -70,7 +60,8 @@ def standardization(data):
     sigma = np.std(data, axis=0)
     return (data - mu) / sigma
 
-def read_data_without_guidance(file_path, EmbbingModel, batch_converter):
+
+def read_data_without_guidance(file_path, EmbbingModel, batch_converter, device):
     with open(file_path, 'r') as file:
         lines = file.readlines()
 
@@ -78,6 +69,7 @@ def read_data_without_guidance(file_path, EmbbingModel, batch_converter):
     input_seqs = []
     true_seqs = []
     bd_scores = []
+
     for line in lines:
         words = line.split()
         b = words[-1]
@@ -88,13 +80,10 @@ def read_data_without_guidance(file_path, EmbbingModel, batch_converter):
 
         values_list.insert(0, 0)
 
-
         input_seq = values_list[:-1]
         true_seq = values_list[1:]
-
         decimal_part = float(words[0])
-        decimal_part = (sigmoid(decimal_part, 0.05)-0.5)*2.0
-
+        decimal_part = (sigmoid(decimal_part, 0.05) - 0.5) * 2.0
 
         seq = ("undefined", b)
         seq_unused = ('UNUSE', 'ACGU')
@@ -102,10 +91,9 @@ def read_data_without_guidance(file_path, EmbbingModel, batch_converter):
         all_rna.append(seq)
         all_rna.append(seq_unused)
 
-        rna_fm = rna_seq_embbding(all_rna, batch_converter, EmbbingModel)
+        rna_fm = rna_seq_embbding(all_rna, batch_converter, EmbbingModel, device)
         rna_fm = rna_fm[1:-1, :]
         rna_fm = rna_fm.cpu().numpy()
-
 
         rna_fm = np.mean(rna_fm, axis=0)
         rna_fm = standardization(rna_fm)
@@ -117,10 +105,11 @@ def read_data_without_guidance(file_path, EmbbingModel, batch_converter):
     return rnas, input_seqs, true_seqs, bd_scores
 
 
-def read_data(file_path, is_batch=False):
-    EmbbingModel, batch_converter = get_rna_fm_model()
+def get_data_rna_fm(file_path, is_batch, device):
+    EmbbingModel, batch_converter = get_rna_fm_model(device)
 
-    rnas, input_seqs, true_seqs, bd_scores = read_data_without_guidance(file_path, EmbbingModel, batch_converter)
+    rnas, input_seqs, true_seqs, bd_scores = read_data_without_guidance(file_path, EmbbingModel, batch_converter,
+                                                                        device)
 
     if is_batch:
         rnas1 = torch.tensor(rnas)
@@ -128,7 +117,7 @@ def read_data(file_path, is_batch=False):
         true_seqs1 = torch.tensor(np.asarray(true_seqs))
         bd_scores1 = torch.tensor(np.asarray(bd_scores))
     else:
-        rnas1 = torch.tensor(rnas).to(device)  # .to(torch.long)
+        rnas1 = torch.tensor(rnas).to(device)
         input_seqs1 = torch.tensor(np.asarray(input_seqs)).to(device)
         true_seqs1 = torch.tensor(np.asarray(true_seqs)).to(device)
         bd_scores1 = torch.tensor(np.asarray(bd_scores)).to(device)
@@ -136,9 +125,9 @@ def read_data(file_path, is_batch=False):
     return rnas1, input_seqs1, true_seqs1, bd_scores1
 
 
-def train_without_guidance(train_file, test_file, batch_size):
-    tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores = read_data(train_file, is_batch=True)
-    te_feats, te_input_seqs, te_true_seqs, te_bd_scores = read_data(test_file, is_batch=True)
+def train_without_guidance(train_file, test_file, batch_size, model_name, device):
+    tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores = get_data_rna_fm(train_file, is_batch=True, device=device)
+    te_feats, te_input_seqs, te_true_seqs, te_bd_scores = get_data_rna_fm(test_file, is_batch=True, device=device)
 
     train_data = torch_data.TensorDataset(tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores)
     test_data = torch_data.TensorDataset(te_feats, te_input_seqs, te_true_seqs, te_bd_scores)
@@ -171,7 +160,6 @@ def train_without_guidance(train_file, test_file, batch_size):
     loss_func2 = nn.CrossEntropyLoss(ignore_index=0)
     w = 0.15
 
-    model_name = 'round1-sample1_womlp-250_loss1_loss2_085-015_2.model'
     fw = open('log/' + model_name + '_training_log.txt', 'w')
 
     for epoch in range(250):
@@ -206,7 +194,6 @@ def train_without_guidance(train_file, test_file, batch_size):
                                                      num_classes=5,
                                                      ignore_index=0,
                                                      average="micro")
-
 
             loss = loss2
 
@@ -246,7 +233,6 @@ def train_without_guidance(train_file, test_file, batch_size):
                                                         ignore_index=0,
                                                         average="micro")
 
-
             test_loss2_value += loss2.item()
             test_b_num += 1.
         end_t = time.time()
@@ -269,25 +255,35 @@ def train_without_guidance(train_file, test_file, batch_size):
     torch.save(model, 'model/' + model_name + '.model')
 
 
-
 def main():
     parser = argparse.ArgumentParser(description="Choose which function to run.")
     parser.add_argument('function', choices=['1', '2', '3'], help="Function to run")
     parser.add_argument('--cuda', type=str, default="0", help="CUDA device ID (e.g., '0', '1', '2')")
     parser.add_argument('--train_file', type=str)
     parser.add_argument('--test_file', type=str)
+    parser.add_argument('--model_name', type=str)
     parser.add_argument('--batch_size', type=int, default="1000")
 
-
     args = parser.parse_args()
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda
+
+    # os.environ["CUDA_VISIBLE_DEVICES"] = f'{args.cuda}'
+
+    CUDA = args.cuda
     train_file = args.train_file
     test_file = args.test_file
     batch_size = args.batch_size
+    model_name = args.model_name
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = f'{CUDA}'
+
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
 
     if args.function == '1':
-        train_without_guidance(train_file, test_file, batch_size)
+        train_without_guidance(train_file, test_file, batch_size, model_name, device)
 
 
 if __name__ == '__main__':
-   main()
+    main()
