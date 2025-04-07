@@ -34,6 +34,11 @@ generation RNA aptamers should follow this code
 The generation of GRAPE need sample RNA aptamers. And the format of sample_aptamers.txt should be same as training file ,and the num is generating the number of aptamers seq.
 Numbers 1, 2, 3, 4, and 5 represent training the model using RNA-FM, EVO, without using an LLM model, without using guidance, and VAE.
 
+
+The RBD and CD3e original dataset is stored on the following website.
+```bash
+https://drive.google.com/drive/folders/1cTFhEZJrLScKX-mEqJxUOp_MIEUc9dc1?usp=sharing
+```
 ## Refernce
 ```bash
    RNA-FM
