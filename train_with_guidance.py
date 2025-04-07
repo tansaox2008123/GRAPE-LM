@@ -414,7 +414,7 @@ def train_guidance_LLM_Evo(train_file, test_file, batch_size, model_name, device
                              pin_memory=True,
                              drop_last=False)
 
-    model = FullModel_guidance_Evo(input_dim=15360,
+    model = FullModel_guidance_Evo(input_dim=10240,
                                    model_dim=128,
                                    tgt_size=5,
                                    n_declayers=2,
@@ -428,10 +428,10 @@ def train_guidance_LLM_Evo(train_file, test_file, batch_size, model_name, device
     loss_func1 = nn.MSELoss()
     loss_func2 = nn.CrossEntropyLoss(ignore_index=0)
 
-    w = 0.15
+    w = 0.50
 
     fw = open('log/' + model_name + '_training_log.txt', 'w')
-    for epoch in range(450):
+    for epoch in range(250):
         start_t = time.time()
         loss1_value = 0.0
         loss2_value = 0.0
