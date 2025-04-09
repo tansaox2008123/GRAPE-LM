@@ -27,7 +27,8 @@ Evo https://github.com/evo-design/evo
 ## Quickstart
 Train your own model should follow this code
 ```bash
-   python train.py  1 --cuda 0 --train_file datasets/RBD_dataset/RBD-train-seq.txt --test_file datasets/RBD_dataset/RBD-test-seq.txt --model_name RBD-RNA-FM.model --batch_size 1000
+   python train.py  1 --cuda 0 --train_file datasets/RBD_dataset/RBD-train-seq.txt 
+   --test_file datasets/RBD_dataset/RBD-test-seq.txt --model_name RBD-RNA-FM.model --batch_size 1000
 ```
 Numbers 1, 2 represent training the model using RNA-FM, EVO respectively.
 The training file format can be referenced from the dateset following file.
