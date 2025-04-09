@@ -14,7 +14,7 @@ Python: 3.8.11 (Above)
 
 System: Ubuntu 22.04.4 (Suggestion)
 
-bash
+```bash
    git clone https://github.com/tansaox2008123/Grape.git
    pip install -r requirements.txt
 ```
