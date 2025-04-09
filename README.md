@@ -11,7 +11,7 @@ GRAPE demonstrates superior performance compared to existing generative models b
 First,download the repository and create the environment.
 ```bash
    git clone https://github.com/tansaox2008123/Grape.git
-   conda env create -f environment.yml
+   pip install -r requirements.txt
 ```
 
 And you can get more details in these websites
