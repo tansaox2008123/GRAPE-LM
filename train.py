@@ -16,8 +16,8 @@ import argparse
 sys.path.append(os.path.abspath(''))
 
 #if you have any internet error please try this code with your owner ip
-# os.environ["http_proxy"] = "http://...:8888"
-# os.environ["https_proxy"] = "http://...:8888"
+#  os.environ["http_proxy"] = "http://...:8888"
+#  os.environ["https_proxy"] = "http://...:8888"
 
 
 def sigmoid(x, k=0.05):
