@@ -7,7 +7,7 @@ Traditional aptamer selection methods, such as SELEX, often require multiple rou
 
 GRAPE demonstrates superior performance compared to existing generative models by producing diverse, rational, and high-affinity aptamers with just a single round of intracellular screening. This has been validated across multiple targets, including human and viral proteins, highlighting its potential as a transformative tool in RNA evolution.
 
-## Create Environment with yml
+## Install dependencies
 First,download the repository and create the environment.
 ```bash
    git clone https://github.com/tansaox2008123/Grape.git
