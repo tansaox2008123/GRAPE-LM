@@ -26,7 +26,7 @@ Evo https://github.com/evo-design/evo
 ## Quickstart
 Train your own model should follow this code
 ```bash
-   python train_with_guidance.py  1 --cuda 0 --train_file your_train_file.txt --test_file your_test_file.txt --model_name your_model_name.txt --batch_size 1000
+   python train_with_guidance.py  1 --cuda 0 --train_file your_train_file.txt --test_file your_test_file.txt --model_name your_model_name.model --batch_size 1000
 ```
 Numbers 1, 2, and 3 represent training the model using RNA-FM, EVO, and without using an LLM model, respectively.
 The training file format can be referenced from the dateset following file.
