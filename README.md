@@ -34,7 +34,7 @@ The training file format can be referenced from the dateset following file.
 
 generation RNA aptamers should follow this code
 ```bash
-   python generation.py 1 --cuda 0 --input_file sample_aptamers.txt --output_file output_file.txt --model_name RBD-RNA-FM.model --num 1000
+   python generation.py 1 --cuda 0 --input_file sample_aptamers.txt --output_file output_file.txt --model_name model/RBD-RNA-FM.model --num 1000
 ```
 The generation of GRAPE need sample RNA aptamers. And the format of sample_aptamers.txt should be same as training file, and the num is generating the number of aptamers seq.
 Numbers 1, 2 represent training the model using RNA-FM, EVO.
