@@ -7,7 +7,7 @@ import torch.utils.data as torch_data
 from torch.utils.data import Dataset, DataLoader
 import torchmetrics
 import time
-from model_with_guidance import *
+from model import *
 import sys
 import fm
 from evo import Evo
