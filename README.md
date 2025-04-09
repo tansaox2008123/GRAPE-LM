@@ -9,7 +9,11 @@ GRAPE demonstrates superior performance compared to existing generative models b
 
 ## Install dependencies
 First,download the repository and create the dependencies.
-```bash
+
+python=3.8.11
+system=Ubuntu 22.04.4
+
+bash
    git clone https://github.com/tansaox2008123/Grape.git
    pip install -r requirements.txt
 ```
