@@ -27,16 +27,14 @@ Evo https://github.com/evo-design/evo
 ## Quickstart
 Train your own model should follow this code
 ```bash
-   python train.py  1 --cuda 0 --train_file datasets/RBD_dataset/RBD-train-seq.txt 
-   --test_file datasets/RBD_dataset/RBD-test-seq.txt --model_name RBD-RNA-FM.model --batch_size 1000
+   python train.py  1 --cuda 0 --train_file datasets/RBD_dataset/RBD-train-seq.txt  --test_file datasets/RBD_dataset/RBD-test-seq.txt --model_name RBD-RNA-FM.model --batch_size 1000
 ```
 Numbers 1, 2 represent training the model using RNA-FM, EVO respectively.
 The training file format can be referenced from the dateset following file.
 
 generation RNA aptamers should follow this code
 ```bash
-   python generation.py 1 --cuda 0 --input_file sample_aptamers.txt
-   --output_file output_file.txt --model_name RBD-RNA-FM.model --num 1000
+   python generation.py 1 --cuda 0 --input_file sample_aptamers.txt --output_file output_file.txt --model_name RBD-RNA-FM.model --num 1000
 ```
 The generation of GRAPE need sample RNA aptamers. And the format of sample_aptamers.txt should be same as training file, and the num is generating the number of aptamers seq.
 Numbers 1, 2 represent training the model using RNA-FM, EVO.
