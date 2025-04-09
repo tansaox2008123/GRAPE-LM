@@ -36,9 +36,10 @@ def greedy_decode_guidance_without_llm(model, input_src, max_len, start_symbol, 
 def greedy_decode_without_guidance(model, input_src, max_len, start_symbol, is_noise, device):
     if is_noise:
         input_src = add_gaussian_noise(input_src, device, mean=0.0, std=0.1)
+    memory = model.adapter(input_src)
     ys = torch.ones(1, 1).fill_(start_symbol).type_as(input_src.data).long()
     for i in range(max_len):
-        out = model.decoder(ys, input_src)
+        out = model.decoder(ys, memory)
         selected_tensor = out[0]
         prob = model.generator(selected_tensor[:, -1])
         _, next_word = torch.max(prob, dim=1)
