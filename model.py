@@ -291,33 +291,3 @@ class FullModel_guidance_Evo(nn.Module):
 
         return bind_scores, pred_seq
 
-
-class FullModel_guidance_Without_LLM(nn.Module):
-    def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout):
-
-        super(FullModel_guidance_Without_LLM, self).__init__()
-        self.adapter = Adapter(embed_dim=input_dim,
-                               model_dim=model_dim,
-                               dropout=dropout)
-
-        self.predictor = Predictor(hidd_feat_dim=model_dim,
-                                   model_dim=model_dim,
-                                   dropout=dropout)
-
-        self.decoder = Decoder(tgt_size=tgt_size,
-                               n_layers=n_declayers,
-                               d_model=model_dim,
-                               d_ff=d_ff,
-                               d_k=d_k_v,
-                               d_v=d_k_v,
-                               n_heads=n_heads,
-                               dropout=dropout)
-        self.generator = Generator(model_dim, vocab=tgt_size)
-
-    def forward(self, rna_emds, rna_seq):
-        hidd_feats = self.adapter(rna_emds)
-        bind_scores = self.predictor(hidd_feats)
-        dec_outputs, _, _ = self.decoder(rna_seq, hidd_feats)
-        pred_seq = self.generator(dec_outputs)
-
-        return bind_scores, pred_seq
