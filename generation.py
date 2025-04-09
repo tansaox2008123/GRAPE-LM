@@ -10,7 +10,7 @@ import fm
 import argparse
 from evo import Evo
 
-from model_with_guidance import *
+from model import *
 
 #  If you have any internet error please try this code with your proxy setting.
 #  os.environ["http_proxy"] = "http://...:8888"
