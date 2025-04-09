@@ -12,9 +12,9 @@ from evo import Evo
 
 from model_with_guidance import *
 
-#if you have any internet error please try this code with your owner ip
-# os.environ["http_proxy"] = "http://...:8888"
-# os.environ["https_proxy"] = "http://...:8888"
+#  If you have any internet error please try this code with your proxy setting.
+#  os.environ["http_proxy"] = "http://...:8888"
+#  os.environ["https_proxy"] = "http://...:8888"
 
 
 def greedy_decode_guidance_without_llm(model, input_src, max_len, start_symbol, is_noise, device):
