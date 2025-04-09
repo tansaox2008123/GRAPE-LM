@@ -15,7 +15,7 @@ import argparse
 
 sys.path.append(os.path.abspath(''))
 
-#if you have any internet error please try this code with your owner ip
+#  If you have any internet error please try this code with your proxy setting.
 #  os.environ["http_proxy"] = "http://...:8888"
 #  os.environ["https_proxy"] = "http://...:8888"
 
