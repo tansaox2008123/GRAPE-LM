@@ -8,7 +8,7 @@ Traditional aptamer selection methods, such as SELEX, often require multiple rou
 GRAPE demonstrates superior performance compared to existing generative models by producing diverse, rational, and high-affinity aptamers with just a single round of intracellular screening. This has been validated across multiple targets, including human and viral proteins, highlighting its potential as a transformative tool in RNA evolution.
 
 ## Install dependencies
-First,download the repository and create the dependencies.
+First,download the repository and install dependencies.
 
 Python: 3.11
 
@@ -29,7 +29,7 @@ Train your own model should follow this code
 ```bash
    python train_with_guidance.py  1 --cuda 0 --train_file your_train_file.txt --test_file your_test_file.txt --model_name your_model_name.model --batch_size 1000
 ```
-Numbers 1, 2, and 3 represent training the model using RNA-FM, EVO, and without using an LLM model, respectively.
+Numbers 1, 2 represent training the model using RNA-FM, EVO respectively.
 The training file format can be referenced from the dateset following file.
 
 generation RNA aptamers should follow this code
@@ -38,7 +38,7 @@ generation RNA aptamers should follow this code
    --output_file your_output_file.txt --model_name your_model_name.model --num 1000
 ```
 The generation of GRAPE need sample RNA aptamers. And the format of sample_aptamers.txt should be same as training file ,and the num is generating the number of aptamers seq.
-Numbers 1, 2, 3, 4, and 5 represent training the model using RNA-FM, EVO, without using an LLM model, without using guidance, and VAE.
+Numbers 1, 2 represent training the model using RNA-FM, EVO.
 
 
 The RBD and CD3e original dataset is stored on the following website.
