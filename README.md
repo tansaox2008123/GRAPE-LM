@@ -20,6 +20,11 @@ System: Ubuntu 22.04.4
    pip install -r requirements.txt
 ```
 
+If you have any problem with install evo-model try this code 
+```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
 And you can get more details in these websites
 RNA-FM https://github.com/ml4bio/RNA-FM.
 Evo https://github.com/evo-design/evo
