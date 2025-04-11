@@ -342,7 +342,7 @@ def train_guidance_LLM_rna_fm(train_file, test_file, batch_size, model_name, dev
               '| te_acc =', '{:.2f}'.format(te_acc2 / test_b_num),
               '| time =', '{:.2f}'.format(end_t - start_t)
               )
-    torch.save(model, 'model/' + model_name + '.model')
+    torch.save(model, 'model/' + model_name)
 
 
 def train_guidance_LLM_Evo(train_file, test_file, batch_size, model_name, device):
@@ -480,7 +480,7 @@ def train_guidance_LLM_Evo(train_file, test_file, batch_size, model_name, device
               '| te_acc =', '{:.2f}'.format(te_acc2 / test_b_num),
               '| time =', '{:.2f}'.format(end_t - start_t)
               )
-    torch.save(model, 'model/' + model_name + '.model')
+    torch.save(model, 'model/' + model_name)
 
 
 
