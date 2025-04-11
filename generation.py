@@ -400,18 +400,7 @@ def main():
                                 model_name,
                                 num,
                                 device)
-    elif args.function == '3':
-        generation_guidance_without_llm(input_file,
-                                        output_file,
-                                        model_name,
-                                        num,
-                                        device)
-    elif args.function == '4':
-        generation_without_guidance(input_file,
-                                    output_file,
-                                    model_name,
-                                    num,
-                                    device)
+
 
 
 if __name__ == '__main__':
