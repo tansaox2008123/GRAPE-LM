@@ -17,6 +17,7 @@ System: Ubuntu 22.04.4
 ```bash
    git clone https://github.com/tansaox2008123/Grape.git
    pip install torch==2.0.1
+   pip install flash-attn==2.5.6
    pip install -r requirements.txt
 ```
 
