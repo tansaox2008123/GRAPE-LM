@@ -1,3 +1,3 @@
-evo-model==0.1.1
+evo-model==0.4
 rna-fm==0.2.2
 torchmetrics==1.5.2
