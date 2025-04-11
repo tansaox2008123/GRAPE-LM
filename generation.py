@@ -329,7 +329,7 @@ def generation_guidance_without_llm(input_file, output_file, model_name, num, de
 
     for rna_input in rnas:
         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
-        random_seq2 = greedy_decode_guidance_without_llm(model, random_rna_inputs, 20, 0, False, device)
+        random_seq2 = greedy_decode_guidance_without_llm(model, random_rna_inputs, 20, 0, True, device)
         random_rnas.append(random_seq2)
         print("Using greedy_decode generate random RNA aptamers seqs：" + str(random_seq2))
 
