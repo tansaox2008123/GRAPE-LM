@@ -17,37 +17,6 @@ from model import *
 #  os.environ["https_proxy"] = "http://...:8888"
 
 
-def greedy_decode_guidance_without_llm(model, input_src, max_len, start_symbol, is_noise, device):
-    if is_noise:
-        input_src = add_gaussian_noise(input_src, device, mean=0.0, std=0.1)
-    memory = model.adapter(input_src)
-    ys = torch.ones(1, 1).fill_(start_symbol).type_as(input_src.data).long()
-    for i in range(max_len):
-        out = model.decoder(ys, memory)
-        selected_tensor = out[0]
-        prob = model.generator(selected_tensor[:, -1])
-        _, next_word = torch.max(prob, dim=1)
-        next_word = next_word.item()
-        ys = torch.cat([ys,
-                        torch.ones(1, 1).type_as(input_src.data).fill_(next_word)], dim=1).long()
-    return ys
-
-
-def greedy_decode_without_guidance(model, input_src, max_len, start_symbol, is_noise, device):
-    if is_noise:
-        input_src = add_gaussian_noise(input_src, device, mean=0.0, std=0.1)
-    memory = model.adapter(input_src)
-    ys = torch.ones(1, 1).fill_(start_symbol).type_as(input_src.data).long()
-    for i in range(max_len):
-        out = model.decoder(ys, memory)
-        selected_tensor = out[0]
-        prob = model.generator(selected_tensor[:, -1])
-        _, next_word = torch.max(prob, dim=1)
-        next_word = next_word.item()
-        ys = torch.cat([ys,
-                        torch.ones(1, 1).type_as(input_src.data).fill_(next_word)], dim=1).long()
-    return ys
-
 
 # GRAPE generation method
 def greedy_decode_guidance(model, input_src, max_len, start_symbol, is_noise, device):
@@ -207,59 +176,6 @@ def get_sample_AE_evo(low, high, num, input_file, device):
     return rnas
 
 
-def get_sample_AE_wollm(low, high, num, input_file, device):
-    with open(input_file, 'r') as file:
-        lines = file.readlines()
-    rnas = []
-
-    for _ in range(num):
-        rna_1 = []
-        rna_2 = []
-
-        i = random.randint(low, high)
-        j = random.randint(low, high)
-
-        words1 = lines[i].split()
-        seq_1 = words1[-1]
-        words2 = lines[j].split()
-        seq_2 = words2[-1]
-
-        rna_1 = convert_to_rna_sequence_rna_fm(seq_1)
-        rna_2 = convert_to_rna_sequence_rna_fm(seq_2)
-        average_list = [(x + y) / 2 for x, y in zip(rna_1, rna_2)]
-
-        rnas1 = torch.tensor(average_list, dtype=torch.float32).to(device)
-
-        rnas.append(rnas1)
-    return rnas
-
-
-def get_sample_without_guidance(low, high, num, input_file, device):
-    EmbbingModel, batch_converter = get_rna_fm_model(device)
-
-    with open(input_file, 'r') as file:
-        lines = file.readlines()
-    rnas = []
-
-    for _ in range(num):
-        i = random.randint(low, high)
-        j = random.randint(low, high)
-
-        line_1 = lines[i].split()[-1]
-        line_2 = lines[j].split()[-1]
-
-        rna_fm1 = get_rna_fm_embedding(line_1, batch_converter, EmbbingModel, device)
-        rna_fm2 = get_rna_fm_embedding(line_2, batch_converter, EmbbingModel, device)
-
-        rna_fm = (rna_fm1 + rna_fm2) / 2
-
-        rna_fm = np.mean(rna_fm, axis=0)
-        rna_fm = standardization(rna_fm)
-
-        rnas.append(rna_fm)
-    rnas = torch.tensor(rnas).to(device)
-    return rnas
-
 
 def generation_guidance_rna_fm(input_file, output_file, model_name, num, device):
     model_name_2 = f'model/{model_name}'
@@ -304,58 +220,6 @@ def generation_guidance_evo(input_file, output_file, model_name, num, device):
     for rna_input in rnas:
         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
         random_seq = greedy_decode_guidance(model, random_rna_inputs, 20, 0, True, device)
-        random_rnas.append(random_seq)
-        print("Using greedy_decode generate random RNA aptamers seqs：" + str(random_seq))
-
-    with open(output_file, 'w') as file2:
-        for line in random_rnas:
-            file2.write(str(line) + '\n')
-
-
-def generation_guidance_without_llm(input_file, output_file, model_name, num, device):
-    model_name_2 = f'model/{model_name}'
-
-    model = torch.load(model_name_2)
-    model.eval()
-    model = model.to(device)
-
-    with open(input_file, 'r') as file:
-        lines = file.readlines()
-        num_lines = len(lines)
-
-    random_rnas = []
-
-    rnas = get_sample_AE_wollm(0, num_lines - 1, num, input_file, device)
-
-    for rna_input in rnas:
-        random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
-        random_seq2 = greedy_decode_guidance_without_llm(model, random_rna_inputs, 20, 0, True, device)
-        random_rnas.append(random_seq2)
-        print("Using greedy_decode generate random RNA aptamers seqs：" + str(random_seq2))
-
-    with open(output_file, 'w') as file2:
-        for line in random_rnas:
-            file2.write(str(line) + '\n')
-
-
-def generation_without_guidance(input_file, output_file, model_name, num, device):
-    model_name_2 = f'model/{model_name}'
-
-    model = torch.load(model_name_2)
-    model.eval()
-    model = model.to(device)
-
-    with open(input_file, 'r') as file:
-        lines = file.readlines()
-        num_lines = len(lines)
-
-    random_rnas = []
-
-    rnas = get_sample_without_guidance(0, num_lines - 1, num, input_file, device)
-
-    for rna_input in rnas:
-        random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
-        random_seq = greedy_decode_without_guidance(model, random_rna_inputs, 20, 0, True, device)
         random_rnas.append(random_seq)
         print("Using greedy_decode generate random RNA aptamers seqs：" + str(random_seq))
 
