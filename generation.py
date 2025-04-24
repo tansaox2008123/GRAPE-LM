@@ -194,8 +194,12 @@ def generation_guidance_rna_fm(input_file, output_file, model_name, num, device)
     for rna_input in rnas:
         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
         random_seq = greedy_decode_guidance(model, random_rna_inputs, 20, 0, True, device)
-        random_rnas.append(random_seq)
-        print("Using greedy_decode generate random RNA aptamers seqs：" + str(random_seq))
+        
+        id_to_base = {1: 'A', 2: 'C', 3: 'G', 4: 'U'}
+
+        sequence_ids = random_seq[0].tolist()
+        rna_sequence = ''.join([id_to_base.get(i, '') for i in sequence_ids])  
+        random_rnas.append(rna_sequence)
 
     with open(output_file, 'w') as file2:
         for line in random_rnas:
@@ -220,8 +224,12 @@ def generation_guidance_evo(input_file, output_file, model_name, num, device):
     for rna_input in rnas:
         random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
         random_seq = greedy_decode_guidance(model, random_rna_inputs, 20, 0, True, device)
-        random_rnas.append(random_seq)
-        print("Using greedy_decode generate random RNA aptamers seqs：" + str(random_seq))
+        
+        id_to_base = {1: 'A', 2: 'C', 3: 'G', 4: 'U'}
+
+        sequence_ids = random_seq[0].tolist()
+        rna_sequence = ''.join([id_to_base.get(i, '') for i in sequence_ids])  
+        random_rnas.append(rna_sequence)
 
     with open(output_file, 'w') as file2:
         for line in random_rnas:
