@@ -199,6 +199,7 @@ def generation_guidance_rna_fm(input_file, output_file, model_name, num, device)
 
         sequence_ids = random_seq[0].tolist()
         rna_sequence = ''.join([id_to_base.get(i, '') for i in sequence_ids])  
+        print(rna_sequence)
         random_rnas.append(rna_sequence)
 
     with open(output_file, 'w') as file2:
@@ -229,6 +230,7 @@ def generation_guidance_evo(input_file, output_file, model_name, num, device):
 
         sequence_ids = random_seq[0].tolist()
         rna_sequence = ''.join([id_to_base.get(i, '') for i in sequence_ids])  
+        print(rna_sequence)
         random_rnas.append(rna_sequence)
 
     with open(output_file, 'w') as file2:
