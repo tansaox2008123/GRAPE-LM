@@ -252,8 +252,8 @@ def train_guidance_LLM_rna_fm(train_file, test_file, batch_size, model_name, dev
         b_num = 0.0
 
         # optimizer = torch.optim.Adam(model.parameters(), lr=(250.0 - epoch) * 0.00001)
-        # optimizer = torch.optim.Adam(model.parameters(), lr=max((250.0 - epoch) * 0.00001, 0.0001))
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.0006)
+        optimizer = torch.optim.Adam(model.parameters(), lr=max((250.0 - epoch) * 0.00001, 0.0001))
+        # optimizer = torch.optim.Adam(model.parameters(), lr=0.0006)
 
         model.train()
         for i, data in enumerate(train_loader):
@@ -390,8 +390,8 @@ def train_guidance_LLM_Evo(train_file, test_file, batch_size, model_name, device
         b_num = 0.0
 
         # optimizer = torch.optim.Adam(model.parameters(), lr=(250.0 - epoch) * 0.00001)
-        # optimizer = torch.optim.Adam(model.parameters(), lr=max((250.0 - epoch) * 0.00001, 0.0001))
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.0006)
+        optimizer = torch.optim.Adam(model.parameters(), lr=max((250.0 - epoch) * 0.00001, 0.0001))
+        # optimizer = torch.optim.Adam(model.parameters(), lr=0.0006)
 
         model.train()
         for i, data in enumerate(train_loader):
