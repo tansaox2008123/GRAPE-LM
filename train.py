@@ -1,271 +1,375 @@
-# -*- coding: utf-8 -*-
 import os
-import re
-import ast
-import torch.nn.functional as F
-import torch.utils.data as torch_data
+import gc
+import types
+from copy import deepcopy
+import torch
+from torch import nn
 from torch.utils.data import Dataset, DataLoader
 import torchmetrics
 import time
-from model import *
-import sys
+import numpy as np
+from model import FullModel_guidance, FullModel_guidance_LSTM, FullModelGru, FullModelCNN , FullModel_guidance_stack
 import fm
 from evo import Evo
 import argparse
-
-sys.path.append(os.path.abspath(''))
-
-#  If you have any internet error please try this code with your proxy setting.
-#  os.environ["http_proxy"] = "http://...:8888"
-#  os.environ["https_proxy"] = "http://...:8888"
+from torchmetrics.regression import R2Score
+from torchmetrics.functional import pearson_corrcoef
+from tqdm import tqdm
+import glob
 
 
-def sigmoid(x, k=0.05):
+def sigmoid(x, k):
     return 1 / (1 + np.exp(-k * x))
 
 
 def standardization(data):
-    mu = np.mean(data, axis=0)
-    sigma = np.std(data, axis=0)
+    mu = torch.mean(data, dim=-1, keepdim=True)
+    sigma = torch.std(data, dim=-1, keepdim=True)
     return (data - mu) / sigma
 
 
-def convert_to_rna_sequence_rna_fm(data):
-    rna_to_num = {'A': 1, 'C': 2, 'G': 3, 'U': 4}
+def rna_to_numbers(seq):
+    base_to_num = {"A": 1, "C": 2, "G": 3, "U": 4}
 
-    numbers = [rna_to_num.get(base, -1) for base in data.upper()]
+    numbers = [base_to_num.get(base, -1) for base in seq.upper()]
 
     return numbers
 
 
-def convert_to_rna_sequence_evo(data):
-    mapping = {1: 'A', 2: 'C', 3: 'G', 4: 'U'}
-
-    rna_sequence = ''.join([mapping[number] for number in data])
-
-    return rna_sequence
-
-
-def read_data_rna_fm(file_path, EmbbingModel, batch_converter, device):
-    with open(file_path, 'r') as file:
-        lines = file.readlines()
-
-    rnas = []
-    input_seqs = []
-    true_seqs = []
-    bd_scores = []
-
-    for line in lines:
-        words = line.split()
-        b = words[-1]
-
-        rna_one_hot = convert_to_rna_sequence_rna_fm(b)
-
-        values_list = list(rna_one_hot)
-
-        values_list.insert(0, 0)
-
-        input_seq = values_list[:-1]
-        true_seq = values_list[1:]
-        decimal_part = float(words[0])
-        decimal_part = (sigmoid(decimal_part, 0.05) - 0.5) * 2.0
-
-        seq = ("undefined", b)
-        seq_unused = ('UNUSE', 'ACGU')
-        all_rna = []
-        all_rna.append(seq)
-        all_rna.append(seq_unused)
-
-        rna_fm = rna_seq_embbding(all_rna, batch_converter, EmbbingModel, device)
-        rna_fm = rna_fm[1:-1, :]
-        rna_fm = rna_fm.cpu().numpy()
-
-        rna_fm = rna_fm.reshape(-1)
-        rna_fm = standardization(rna_fm)
-
-        rnas.append(rna_fm)
-        input_seqs.append(input_seq)
-        true_seqs.append(true_seq)
-        bd_scores.append(decimal_part)
-    return rnas, input_seqs, true_seqs, bd_scores
+def rna_to_onehot(seq):
+    mapping = {"A": 0, "C": 1, "G": 2, "U": 3}
+    onehot = np.zeros((len(seq), 4), dtype=np.float32)
+    for i, base in enumerate(seq.upper()):
+        if base in mapping:
+            onehot[i, mapping[base]] = 1.0
+    if args.arch == "base":
+        onehot = onehot.reshape(-1)
+    return onehot
 
 
-def get_data_rna_fm(file_path, is_batch, device):
-    EmbbingModel, batch_converter = get_rna_fm_model(device)
+def get_act_score(cluster_reads, seq_reads):
+    k = args.k
 
-    rnas, input_seqs, true_seqs, bd_scores = read_data_rna_fm(file_path, EmbbingModel, batch_converter, device)
+    cluster_socre = (sigmoid(cluster_reads, k) - 0.5) * 2.0
+    seq_socre = (sigmoid(seq_reads, k) - 0.5) * 2.0
 
-    if is_batch:
-        rnas1 = torch.tensor(rnas)
-        input_seqs1 = torch.tensor(np.asarray(input_seqs))
-        true_seqs1 = torch.tensor(np.asarray(true_seqs))
-        bd_scores1 = torch.tensor(np.asarray(bd_scores))
-    else:
-        rnas1 = torch.tensor(rnas).to(device)
-        input_seqs1 = torch.tensor(np.asarray(input_seqs)).to(device)
-        true_seqs1 = torch.tensor(np.asarray(true_seqs)).to(device)
-        bd_scores1 = torch.tensor(np.asarray(bd_scores)).to(device)
-
-    return rnas1, input_seqs1, true_seqs1, bd_scores1
+    return (cluster_socre * 0.95 + seq_socre * 0.05)
 
 
-def read_data_evo(file_path, model, tokenizer, device):
-    with open(file_path, 'r') as file:
-        lines = file.readlines()
-
-    rnas = []
-    input_seqs = []
-    true_seqs = []
-    bd_scores = []
-
-    for line in lines:
-        words = line.split()
-        b = words[-1]
-
-        rna_one_hot = convert_to_rna_sequence_rna_fm(b)
-
-        values_list = list(rna_one_hot)
-
-        values_list.insert(0, 0)
-
-        input_seq = values_list[:-1]
-        true_seq = values_list[1:]
-
-        decimal_part = float(words[0])
-        decimal_part = (sigmoid(decimal_part, 0.05) - 0.5) * 2.0
-
-        sequence = b
-
-        input_ids = torch.tensor(
-            tokenizer.tokenize(sequence),
-            dtype=torch.int,
-        ).to(device).unsqueeze(0)
-
-        with torch.no_grad():
-            logits, _ = model(input_ids)
-
-        logits = logits.detach()
-        logits = logits.float()
-        cpu_logits = logits.cpu()
-
-        rna_embedding = cpu_logits.numpy()
-
-        rna_embedding = rna_embedding.reshape(-1)
-        rna_embedding = standardization(rna_embedding)
-
-        rnas.append(rna_embedding)
-        input_seqs.append(input_seq)
-        true_seqs.append(true_seq)
-        bd_scores.append(decimal_part)
-    return rnas, input_seqs, true_seqs, bd_scores
+def load_cache(save_name, method):
+    cache_files = glob.glob(f"./datasets/{args.dataset}/{save_name}_{method}_*-*.pt")
+    cache_files.sort(key=lambda x: int(os.path.splitext(x)[0].split("_")[-1].split("-")[0]))
+    for file in cache_files:
+        print(f"Loading {args.dataset} {method} {save_name} data from file {file}...")
+        rna_reps = torch.load(file, map_location="cpu")
+        yield standardization(rna_reps)
 
 
-def get_data_evo(file_path, is_batch, device):
-    evo_model = Evo('evo-1-8k-base')
+def run_rna_fm(rna_fm_inputs, device, save_name, batch_size=2000):
+    cache_files = glob.glob(f"./datasets/{args.dataset}/{save_name}_RNA-FM_*-*.pt")
+    if cache_files:
+        expected_chunks_num = int(os.path.splitext(cache_files[0])[0].split("_")[-1].split("-")[-1]) + 1
+        if expected_chunks_num != len(cache_files):
+            for file in cache_files:
+                print(f"Removing incomplete cache file: {file}")
+                os.remove(file)
+        else:
+            return load_cache(save_name, "RNA-FM")
+
+    print(f"Generating {args.dataset} RNA-FM {save_name} data...")
+
+    rna_fm_model, alphabet = fm.pretrained.rna_fm_t12()
+    batch_converter = alphabet.get_batch_converter()
+    rna_fm_model.to(device)
+    rna_fm_model.eval()
+
+    all_reps = []
+    batch_per_chunk: int = 50
+    chunk = 0
+    batch_num = (len(rna_fm_inputs) + batch_size - 1) // batch_size
+    chunk_num = (batch_num + batch_per_chunk - 1) // batch_per_chunk
+    with tqdm(total=len(rna_fm_inputs), desc="RNA-FM") as pbar:
+        for i in range(0, len(rna_fm_inputs), batch_size):
+            batch_inputs = rna_fm_inputs[i: i + batch_size]
+            batch_labels, batch_strs, batch_tokens = batch_converter(batch_inputs)
+            batch_tokens = batch_tokens.to(device)
+
+            with torch.no_grad():
+                results = rna_fm_model(batch_tokens, repr_layers=[12])
+
+            reps = results["representations"][12]
+            reps = reps[:, 1:-1, :].detach().cpu().float()
+            reps = reps.reshape(reps.shape[0], -1)
+            all_reps.append(reps)
+            if len(all_reps) == batch_per_chunk:
+                rna_reps = torch.cat(all_reps, dim=0)
+                del all_reps
+                gc.collect()
+                torch.save(
+                    rna_reps,
+                    f"./datasets/{args.dataset}/{save_name}_RNA-FM_{chunk}-{chunk_num - 1}.pt",
+                )
+                chunk += 1
+                all_reps = []
+
+            pbar.update(len(batch_inputs))
+
+    if len(all_reps) > 0:
+        rna_reps = torch.cat(all_reps, dim=0)
+        del all_reps
+        gc.collect()
+        torch.save(
+            rna_reps,
+            f"./datasets/{args.dataset}/{save_name}_RNA-FM_{chunk}-{chunk_num - 1}.pt",
+        )
+
+    del rna_fm_model
+    gc.collect()
+
+    return load_cache(save_name, "RNA-FM")
+
+
+def run_evo(evo_inputs, device, save_name, batch_size=1000):
+    cache_files = glob.glob(f"./datasets/{args.dataset}/{save_name}_EVO_*-*.pt")
+    if cache_files:
+        expected_chunks_num = int(os.path.splitext(cache_files[0])[0].split("_")[-1].split("-")[-1]) + 1
+        if expected_chunks_num != len(cache_files):
+            for file in cache_files:
+                print(f"Removing incomplete cache file: {file}")
+                os.remove(file)
+        else:
+            return load_cache(save_name, "EVO")
+
+    print(f"Generating {args.dataset} EVO {save_name} data...")
+
+    evo_model = Evo("evo-1-8k-base")
     model, tokenizer = evo_model.model, evo_model.tokenizer
     model.to(device)
     model.eval()
-    rnas, input_seqs, true_seqs, bd_scores = read_data_evo(file_path, model, tokenizer, device)
 
-    if is_batch:
-        rnas1 = torch.tensor(rnas)
-        input_seqs1 = torch.tensor(np.asarray(input_seqs))
-        true_seqs1 = torch.tensor(np.asarray(true_seqs))
-        bd_scores1 = torch.tensor(np.asarray(bd_scores))
-    else:
-        rnas1 = torch.tensor(rnas).to(device)
-        input_seqs1 = torch.tensor(np.asarray(input_seqs)).to(device)
-        true_seqs1 = torch.tensor(np.asarray(true_seqs)).to(device)
-        bd_scores1 = torch.tensor(np.asarray(bd_scores)).to(device)
+    all_reps = []
+    batch_per_chunk: int = 250
+    chunk = 0
+    batch_num = (len(evo_inputs) + batch_size - 1) // batch_size
+    chunk_num = (batch_num + batch_per_chunk - 1) // batch_per_chunk
+    with tqdm(total=len(evo_inputs), desc="EVO") as pbar:
+        for i in range(0, len(evo_inputs), batch_size):
+            batch_inputs = evo_inputs[i: i + batch_size]
+            input_ids_tensor = torch.stack(
+                [torch.tensor(tokenizer.tokenize(seq), dtype=torch.int) for seq in batch_inputs]).to(device)
+            with torch.no_grad():
+                logits, _ = model(input_ids_tensor)
 
-    return rnas1, input_seqs1, true_seqs1, bd_scores1
+            logits = logits.detach().cpu().float()
+            logits = logits.reshape(logits.shape[0], -1)
+            all_reps.append(logits)
+
+            if len(all_reps) == batch_per_chunk:
+                rna_reps = torch.cat(all_reps, dim=0)
+                del all_reps
+                gc.collect()
+                torch.save(
+                    rna_reps,
+                    f"./datasets/{args.dataset}/{save_name}_EVO_{chunk}-{chunk_num - 1}.pt",
+                )
+                chunk += 1
+                all_reps = []
+
+            pbar.update(len(batch_inputs))
+
+    if len(all_reps) > 0:
+        rna_reps = torch.cat(all_reps, dim=0)
+        del all_reps
+        gc.collect()
+        torch.save(
+            rna_reps,
+            f"./datasets/{args.dataset}/{save_name}_EVO_{chunk}-{chunk_num - 1}.pt",
+        )
+
+    del evo_model
+    gc.collect()
+
+    return load_cache(save_name, "EVO")
 
 
-def get_rna_fm_model(device):
-    torch.cuda.empty_cache()
+def get_seqs_and_labels(file_path):
+    true_seqs = []
+    input_seqs = []
+    act_scores = []
+    with open(file_path, "r") as file:
+        for line in file:
+            true_numbers = rna_to_numbers(line.split()[-1])
+            input_numbers = [0] + true_numbers[:-1]
+            act_score = get_act_score(int(line.split()[0]), int(line.split()[1]))
+            true_seqs.append(true_numbers)
+            input_seqs.append(input_numbers)
+            act_scores.append(act_score)
 
-    EmbbingModel, alphabet = fm.pretrained.rna_fm_t12()
-    batch_converter = alphabet.get_batch_converter()
-    EmbbingModel.to(device)
-    EmbbingModel.eval()
+    input_seqs_np = torch.from_numpy(np.asarray(input_seqs)).to(torch.int64)
+    true_seqs_np = torch.from_numpy(np.asarray(true_seqs)).to(torch.int64)
+    act_scores_np = torch.from_numpy(np.asarray(act_scores)).to(torch.float32)
 
-    return EmbbingModel, batch_converter
-
-
-def rna_seq_embbding(OriginSeq, batch_converter, EmbeddingModel, device):
-    EmbeddingModel = EmbeddingModel.to(device)
-    batch_labels, batch_strs, batch_tokens = batch_converter(OriginSeq)
-    batch_tokens = batch_tokens.to(device)
-
-    tmp = []
-
-    with torch.no_grad():
-        results = EmbeddingModel(batch_tokens, repr_layers=[12])
-    token_embeddings = results["representations"][12][0]
-
-    return token_embeddings
+    return input_seqs_np, true_seqs_np, act_scores_np
 
 
+def get_rna_reps(file_path, device):
+    fname = os.path.splitext(os.path.basename(file_path))[0]
+    with open(file_path, "r") as file:
+        lines = file.read().splitlines()
+    if args.feature == "rna-fm":
+        rna_fm_inputs = [(i, line.split()[-1]) for i, line in enumerate(lines)]
+        rna_reps = run_rna_fm(rna_fm_inputs, device, fname)
+    elif args.feature == "evo":
+        evo_inputs = [line.split()[-1] for line in lines]
+        rna_reps = run_evo(evo_inputs, device, fname)
+    elif args.feature == "one-hot":
+        rna_reps = torch.stack([torch.from_numpy(rna_to_onehot(line.split()[-1])) for line in lines]).to(torch.float32)
 
-def train_guidance_LLM_rna_fm(train_file, test_file, batch_size, model_name, device):
-    tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores = get_data_rna_fm(train_file, is_batch=True, device=device)
-    te_feats, te_input_seqs, te_true_seqs, te_bd_scores = get_data_rna_fm(test_file, is_batch=True, device=device)
+    return rna_reps
 
-    train_data = torch_data.TensorDataset(tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores)
-    test_data = torch_data.TensorDataset(te_feats, te_input_seqs, te_true_seqs, te_bd_scores)
 
-    train_loader = DataLoader(dataset=train_data,
-                              batch_size=batch_size,
-                              shuffle=True,
-                              num_workers=0,
-                              pin_memory=True,
-                              drop_last=False)
-    test_loader = DataLoader(dataset=test_data,
-                             batch_size=batch_size,
-                             shuffle=True,
-                             num_workers=0,
-                             pin_memory=True,
-                             drop_last=False)
+class MyDataset(Dataset):
+    def __init__(self, file_path, device):
+        self.reps = get_rna_reps(file_path, device)
+        self.input_seqs, self.true_seqs, self.act_scores = get_seqs_and_labels(file_path)
 
-    model = FullModel_guidance_RNA_FM(input_dim=12800,
-                                      model_dim=128,
-                                      tgt_size=5,
-                                      n_declayers=2,
-                                      d_ff=128,
-                                      d_k_v=64,
-                                      n_heads=2,
-                                      dropout=0.05)
+        if isinstance(self.reps, types.GeneratorType):
+            self.feats = list(self.reps)
+            self.chunk_size = len(self.feats[0])
+        else:
+            self.feats = self.reps  # one-hot
+            self.chunk_size = None
+
+    def __len__(self):
+        return len(self.input_seqs)
+
+    def __getitem__(self, idx):
+        if self.chunk_size:
+            feats = self.feats[idx // self.chunk_size][idx % self.chunk_size]
+        else:
+            feats = self.feats[idx]
+
+        return feats, self.input_seqs[idx], self.true_seqs[idx], self.act_scores[idx]
+
+
+def train_guidance_LLM(device):
+    n = args.n
+    print(n)
+    arch = args.arch
+    feature = args.feature
+    act_weight = args.act_weight
+    batch_size = args.batch_size
+    model_name = args.model_name
+    dataset = args.dataset
+    train_file = f"./datasets/{dataset}/train.txt"
+    test_file = f"./datasets/{dataset}/test.txt"
+
+    input_dim = {"rna-fm": 12800, "evo": 10240, "one-hot": 80}
+
+    if arch == "base":
+        model = FullModel_guidance_stack(
+            num_layers=n,
+            input_dim=input_dim[feature],
+            model_dim=128,
+            tgt_size=5,
+            n_declayers=2,
+            d_ff=128,
+            d_k_v=64,
+            n_heads=2,
+            dropout=0.05,
+        )
+
+    elif arch == "gru":
+        model = FullModelGru(
+            input_dim=input_dim[feature] // 20,
+            model_dim=128,
+            vocab_size=5,
+            num_gru_layers=2,
+            dropout=0.05,
+        )
+    elif arch == "cnn":
+        model = FullModelCNN(
+            input_dim=4,
+            model_dim=128,
+            tgt_size=5,
+            n_declayers=2,
+            d_ff=128,
+            d_k_v=64,
+            n_heads=2,
+            dropout=0.05,
+        )
+    elif arch == "lstm":
+        model = FullModel_guidance_LSTM(
+            input_dim=4,
+            model_dim=128,
+            tgt_size=5,
+            n_declayers=2,
+            d_ff=128,
+            d_k_v=64,
+            n_heads=2,
+            dropout=0.05,
+        )
+
+    tr_dataset = MyDataset(train_file, device)
+    te_dataset = MyDataset(test_file, device)
+
+    tr_dataloader = DataLoader(
+        dataset=tr_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
+        drop_last=False,
+    )
+    te_dataloader = DataLoader(
+        dataset=te_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+        drop_last=False,
+    )
 
     model = model.to(device)
-
+    # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=1e-4,
+        weight_decay=0.05,
+        betas=(0.9, 0.999),
+        eps=1e-8,
+    )
     loss_func1 = nn.MSELoss()
     loss_func2 = nn.CrossEntropyLoss(ignore_index=0)
+    r2score = R2Score()
 
-    w = 0.50
+    lowest_loss = float("inf")
+    best_epoch = 0
+    best_results = ""
+    patience = 20
+    epochs_no_improvement = 0
+    best_weights = model.state_dict()
+    model_saved = False
 
-    fw = open('log/' + model_name + '_training_log.txt', 'w')
-    for epoch in range(250):
+    fw = open("log/" + model_name + "_training_log.txt", "w", buffering=1)
+    for epoch in range(400):
         start_t = time.time()
-        loss1_value = 0.0
-        loss2_value = 0.0
-        acc2 = 0.0
-        b_num = 0.0
-
-        # optimizer = torch.optim.Adam(model.parameters(), lr=(250.0 - epoch) * 0.00001)
-        optimizer = torch.optim.Adam(model.parameters(), lr=max((250.0 - epoch) * 0.00001, 0.0001))
-        # optimizer = torch.optim.Adam(model.parameters(), lr=0.0006)
-
+        tr_loss1_value = 0.0
+        tr_loss2_value = 0.0
+        tr_acc = 0.0
+        tr_b_num = 0.0
+        tr_r2 = 0.0
+        tr_pearson = 0.0
         model.train()
-        for i, data in enumerate(train_loader):
+
+        for data in tr_dataloader:
             inputs, input_seqs, true_seqs, labels = data
             inputs = inputs.to(device)
             input_seqs = input_seqs.to(device)
             true_seqs = true_seqs.to(device)
             labels = labels.to(device)
-
-            labels = labels.float().view(-1, 1)
+            labels = labels.view(-1, 1)
             bind_socres, pred_seqs = model(inputs, input_seqs)
-
             pred_seqs = torch.softmax(pred_seqs, -1)
             true_seqs = true_seqs.view(-1)
             pred_seqs = pred_seqs.view(true_seqs.shape[0], 5)
@@ -274,247 +378,133 @@ def train_guidance_LLM_rna_fm(train_file, test_file, batch_size, model_name, dev
             loss2 = loss_func2(pred_seqs, true_seqs)
             pred_seqs = torch.argmax(pred_seqs, -1)
 
-            acc2 += torchmetrics.functional.accuracy(pred_seqs,
-                                                     true_seqs,
-                                                     task="multiclass",
-                                                     num_classes=5,
-                                                     ignore_index=0,
-                                                     average="micro")
+            tr_acc += torchmetrics.functional.accuracy(
+                pred_seqs,
+                true_seqs,
+                task="multiclass",
+                num_classes=5,
+                ignore_index=0,
+                average="micro",
+            )
 
-            loss = w * loss1 + (1.0 - w) * loss2
-
-            loss1_value += loss1.item()
-            loss2_value += loss2.item()
+            loss = act_weight * loss1 + (1.0 - act_weight) * loss2
+            tr_r2 += r2score(bind_socres, labels)
+            tr_pearson += pearson_corrcoef(bind_socres, labels)
+            tr_loss1_value += loss1.item()
+            tr_loss2_value += loss2.item()
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            b_num += 1.
+            tr_b_num += 1.0
 
-        test_loss1_value = 0.0
-        test_loss2_value = 0.0
+        te_loss1_value = 0.0
+        te_loss2_value = 0.0
 
-        te_acc2 = 0.0
-        test_b_num = 0.
-
-        model.eval()
-        for i, data in enumerate(test_loader):
-            inputs, input_seqs, true_seqs, labels = data
-            inputs = inputs.to(device)
-            input_seqs = input_seqs.to(device)
-            true_seqs = true_seqs.to(device)
-            labels = labels.to(device)
-
-            bind_socres, pred_seqs = model(inputs, input_seqs)
-            pred_seqs = torch.softmax(pred_seqs, -1)
-            labels = labels.float().view(-1, 1)
-
-            true_seqs = true_seqs.view(-1)
-            pred_seqs = pred_seqs.view(true_seqs.shape[0], 5)
-
-            loss1 = loss_func1(bind_socres, labels)
-            loss2 = loss_func2(pred_seqs, true_seqs)
-
-            pred_seqs = torch.argmax(pred_seqs, -1)
-            te_acc2 += torchmetrics.functional.accuracy(pred_seqs,
-                                                        true_seqs,
-                                                        task="multiclass",
-                                                        num_classes=5,
-                                                        ignore_index=0,
-                                                        average="micro")
-
-            test_loss1_value += loss1.item()
-            test_loss2_value += loss2.item()
-            test_b_num += 1.
-        end_t = time.time()
-        fw.write('{:4d}\t{:.4f}\t{:.4f}\t{:.4f}\t{:.4f}\n'.format(epoch,
-                                                                  loss1_value / b_num,
-                                                                  loss2_value / b_num,
-                                                                  test_loss1_value / test_b_num,
-                                                                  test_loss2_value / test_b_num,
-                                                                  acc2 / b_num,
-                                                                  te_acc2 / test_b_num), )
-        print('Epoch:', '%04d' % (epoch + 1),
-              '| tr_loss1 =', '{:.4f}'.format(loss1_value / b_num),
-              '| tr_loss2 =', '{:.4f}'.format(loss2_value / b_num),
-              '| tr_acc =', '{:.2f}'.format(acc2 / b_num),
-              '| te_loss1 =', '{:.4f}'.format(test_loss1_value / test_b_num),
-              '| te_loss2 =', '{:.4f}'.format(test_loss2_value / test_b_num),
-              '| te_acc =', '{:.2f}'.format(te_acc2 / test_b_num),
-              '| time =', '{:.2f}'.format(end_t - start_t)
-              )
-    torch.save(model, 'model/' + model_name)
-
-
-def train_guidance_LLM_Evo(train_file, test_file, batch_size, model_name, device):
-    tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores = get_data_evo(train_file, is_batch=True, device=device)
-    te_feats, te_input_seqs, te_true_seqs, te_bd_scores = get_data_evo(test_file, is_batch=True, device=device)
-
-    train_data = torch_data.TensorDataset(tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores)
-    test_data = torch_data.TensorDataset(te_feats, te_input_seqs, te_true_seqs, te_bd_scores)
-
-    train_loader = DataLoader(dataset=train_data,
-                              batch_size=batch_size,
-                              shuffle=True,
-                              num_workers=0,
-                              pin_memory=True,
-                              drop_last=False)
-    test_loader = DataLoader(dataset=test_data,
-                             batch_size=batch_size,
-                             shuffle=True,
-                             num_workers=0,
-                             pin_memory=True,
-                             drop_last=False)
-
-    model = FullModel_guidance_Evo(input_dim=10240,
-                                   model_dim=128,
-                                   tgt_size=5,
-                                   n_declayers=2,
-                                   d_ff=128,
-                                   d_k_v=64,
-                                   n_heads=2,
-                                   dropout=0.05)
-
-    model = model.to(device)
-
-    loss_func1 = nn.MSELoss()
-    loss_func2 = nn.CrossEntropyLoss(ignore_index=0)
-
-    w = 0.50
-
-    fw = open('log/' + model_name + '_training_log.txt', 'w')
-    for epoch in range(250):
-        start_t = time.time()
-        loss1_value = 0.0
-        loss2_value = 0.0
-        acc2 = 0.0
-        b_num = 0.0
-
-        # optimizer = torch.optim.Adam(model.parameters(), lr=(250.0 - epoch) * 0.00001)
-        optimizer = torch.optim.Adam(model.parameters(), lr=max((250.0 - epoch) * 0.00001, 0.0001))
-        # optimizer = torch.optim.Adam(model.parameters(), lr=0.0006)
-
-        model.train()
-        for i, data in enumerate(train_loader):
-            inputs, input_seqs, true_seqs, labels = data
-            inputs = inputs.to(device)
-            input_seqs = input_seqs.to(device)
-            true_seqs = true_seqs.to(device)
-            labels = labels.to(device)
-
-            labels = labels.float().view(-1, 1)
-            bind_socres, pred_seqs = model(inputs, input_seqs)
-
-            pred_seqs = torch.softmax(pred_seqs, -1)
-            true_seqs = true_seqs.view(-1)
-            pred_seqs = pred_seqs.view(true_seqs.shape[0], 5)
-
-            loss1 = loss_func1(bind_socres, labels)
-            loss2 = loss_func2(pred_seqs, true_seqs)
-            pred_seqs = torch.argmax(pred_seqs, -1)
-
-            acc2 += torchmetrics.functional.accuracy(pred_seqs,
-                                                     true_seqs,
-                                                     task="multiclass",
-                                                     num_classes=5,
-                                                     ignore_index=0,
-                                                     average="micro")
-
-            loss = w * loss1 + (1.0 - w) * loss2
-
-            loss1_value += loss1.item()
-            loss2_value += loss2.item()
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            b_num += 1.
-
-        test_loss1_value = 0.0
-        test_loss2_value = 0.0
-
-        te_acc2 = 0.0
-        test_b_num = 0.
+        te_acc = 0.0
+        te_r2 = 0.0
+        te_pearson = 0.0
+        te_b_num = 0.0
 
         model.eval()
-        for i, data in enumerate(test_loader):
-            inputs, input_seqs, true_seqs, labels = data
-            inputs = inputs.to(device)
-            input_seqs = input_seqs.to(device)
-            true_seqs = true_seqs.to(device)
-            labels = labels.to(device)
 
-            bind_socres, pred_seqs = model(inputs, input_seqs)
-            pred_seqs = torch.softmax(pred_seqs, -1)
-            labels = labels.float().view(-1, 1)
+        with torch.no_grad():
+            for data in te_dataloader:
+                inputs, input_seqs, true_seqs, labels = data
+                inputs = inputs.to(device)
+                input_seqs = input_seqs.to(device)
+                true_seqs = true_seqs.to(device)
+                labels = labels.to(device)
 
-            true_seqs = true_seqs.view(-1)
-            pred_seqs = pred_seqs.view(true_seqs.shape[0], 5)
+                bind_socres, pred_seqs = model(inputs, input_seqs)
+                pred_seqs = torch.softmax(pred_seqs, -1)
+                labels = labels.float().view(-1, 1)
 
-            loss1 = loss_func1(bind_socres, labels)
-            loss2 = loss_func2(pred_seqs, true_seqs)
+                true_seqs = true_seqs.view(-1)
+                pred_seqs = pred_seqs.view(true_seqs.shape[0], 5)
 
-            pred_seqs = torch.argmax(pred_seqs, -1)
-            te_acc2 += torchmetrics.functional.accuracy(pred_seqs,
-                                                        true_seqs,
-                                                        task="multiclass",
-                                                        num_classes=5,
-                                                        ignore_index=0,
-                                                        average="micro")
+                loss1 = loss_func1(bind_socres, labels)
+                loss2 = loss_func2(pred_seqs, true_seqs)
 
-            test_loss1_value += loss1.item()
-            test_loss2_value += loss2.item()
-            test_b_num += 1.
+                pred_seqs = torch.argmax(pred_seqs, -1)
+                te_acc += torchmetrics.functional.accuracy(
+                    pred_seqs,
+                    true_seqs,
+                    task="multiclass",
+                    num_classes=5,
+                    ignore_index=0,
+                    average="micro",
+                )
+                te_r2 += r2score(bind_socres, labels)
+                te_pearson += pearson_corrcoef(bind_socres, labels)
+
+                te_loss1_value += loss1.item()
+                te_loss2_value += loss2.item()
+                te_b_num += 1.0
+
         end_t = time.time()
-        fw.write('{:4d}\t{:.4f}\t{:.4f}\t{:.4f}\t{:.4f}\n'.format(epoch,
-                                                                  loss1_value / b_num,
-                                                                  loss2_value / b_num,
-                                                                  test_loss1_value / test_b_num,
-                                                                  test_loss2_value / test_b_num,
-                                                                  acc2 / b_num,
-                                                                  te_acc2 / test_b_num), )
-        print('Epoch:', '%04d' % (epoch + 1),
-              '| tr_loss1 =', '{:.4f}'.format(loss1_value / b_num),
-              '| tr_loss2 =', '{:.4f}'.format(loss2_value / b_num),
-              '| tr_acc =', '{:.2f}'.format(acc2 / b_num),
-              '| te_loss1 =', '{:.4f}'.format(test_loss1_value / test_b_num),
-              '| te_loss2 =', '{:.4f}'.format(test_loss2_value / test_b_num),
-              '| te_acc =', '{:.2f}'.format(te_acc2 / test_b_num),
-              '| time =', '{:.2f}'.format(end_t - start_t)
-              )
-    torch.save(model, 'model/' + model_name)
+        results = f"Epoch: {epoch} | tr_loss1 = {(tr_loss1_value / tr_b_num):.4f} | tr_loss2 = {(tr_loss2_value / tr_b_num):.4f} | tr_r2 = {(tr_r2 / tr_b_num):.4f} | \
+tr_pearson={(tr_pearson / tr_b_num):.4f} | tr_acc = {(tr_acc / tr_b_num):.4f} | \
+te_loss1 = {(te_loss1_value / te_b_num):.4f} | te_loss2 = {(te_loss2_value / te_b_num):.4f} | \
+te_r2 = {(te_r2 / te_b_num):.4f} | te_pearson = {(te_pearson / te_b_num):.4f} | te_acc = {(te_acc / te_b_num):.4f} | time = {(end_t - start_t):.2f}"
+        fw.write(results + "\n")
+        print(results)
 
+        if ((te_loss1_value / te_b_num) * act_weight + (te_loss2_value / te_b_num) * (1 - act_weight)) < lowest_loss:
+            lowest_loss = (te_loss1_value / te_b_num) * act_weight + (te_loss2_value / te_b_num) * (1 - act_weight)
+            best_weights = deepcopy(model.state_dict())
+            best_epoch = epoch
+            best_results = results
+            epochs_no_improvement = 0
+        else:
+            epochs_no_improvement += 1
+
+        if epochs_no_improvement >= patience:
+            print(f"Early stop. Best epoch is {best_epoch}.Best results is:")
+            print(best_results)
+            print(model_name)
+            torch.save(best_weights, "model/" + model_name)
+            model_saved = True
+            break
+
+    if not model_saved:
+        print(f"Best epoch is {best_epoch}. Best results is:")
+        print(best_results)
+        print(model_name)
+        torch.save(best_weights, "model/activate_model/" + model_name)
+
+    fw.close()
 
 
 def main():
+    global args
     parser = argparse.ArgumentParser(description="Choose which function to run.")
-    parser.add_argument('function', choices=['1', '2', '3'], help="Function to run")
-    parser.add_argument('--cuda', type=str, default="0", help="CUDA device ID (e.g., '0', '1', '2')")
-    parser.add_argument('--train_file', type=str)
-    parser.add_argument('--test_file', type=str)
-    parser.add_argument('--model_name', type=str)
-    parser.add_argument('--batch_size', type=int, default="1000")
-
+    parser.add_argument("arch", type=str)
+    parser.add_argument("feature", type=str)
+    parser.add_argument("dataset", type=str)
+    parser.add_argument("--cuda", type=str, default="0")
+    parser.add_argument("--act_weight", type=float, default=0.5)
+    parser.add_argument("--model_name", type=str)
+    parser.add_argument("--batch_size", type=int, default=5000)
+    parser.add_argument("--k", type=float, default=0.001)
+    parser.add_argument('--n', type=int, default=1)
     args = parser.parse_args()
 
-    # os.environ["CUDA_VISIBLE_DEVICES"] = f'{args.cuda}'
+    if not args.model_name:
+        args.model_name = f"{args.arch}_{args.feature}_{args.dataset}_{args.k}.model"
+    else:
+        args.model_name = f"{args.arch}_{args.feature}_{args.dataset}_{args.k}_{args.model_name}.model"
 
     CUDA = args.cuda
-    train_file = args.train_file
-    test_file = args.test_file
-    batch_size = args.batch_size
-    model_name = args.model_name
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = f'{CUDA}'
+    os.environ["CUDA_VISIBLE_DEVICES"] = f"{CUDA}"
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
 
-    if args.function == '1':
-        train_guidance_LLM_rna_fm(train_file, test_file, batch_size, model_name, device)
-    elif args.function == '2':
-        train_guidance_LLM_Evo(train_file, test_file, batch_size, model_name, device)
+    train_guidance_LLM(device)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
