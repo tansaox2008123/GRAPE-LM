@@ -3,17 +3,14 @@ import torch
 import torch.nn as nn
 import numpy as np
 import math
-import os
-import fm
-from evo import Evo
 
-base_dict = {1: 'A', 2: 'C', 3: 'G', 4: 'U'}
+base_dict = {1: "A", 2: "C", 3: "G", 4: "U"}
 
 
 def decode_rna_sequences(one_hot_vectors):
     sequences = []
     for row in one_hot_vectors:
-        sequence = ''.join([base_dict[int(num)] for num in row.cpu().numpy()])
+        sequence = "".join([base_dict[int(num)] for num in row.cpu().numpy()])
         sequences.append(sequence)
     return sequences
 
@@ -30,18 +27,6 @@ def rna_seq_embbding(OriginSeq, batch_converter, EmbeddingModel, device):
     token_embeddings = results["representations"][12]
 
     return token_embeddings
-
-
-def standardization(data):
-    mu = np.mean(data, axis=0)
-    sigma = np.std(data, axis=0)
-    return (data - mu) / sigma
-
-
-def standardization_2(data):
-    mu = torch.mean(data, dim=0)
-    sigma = torch.std(data, dim=0)
-    return (data - mu) / (sigma + 1e-5)
 
 
 def get_attention_pad_mask(seq_q, seq_k):
@@ -120,10 +105,10 @@ class PositionalEncoding(nn.Module):
         pe[:, 1::2] = torch.cos(position * div_term)
 
         pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer('pe', pe)
+        self.register_buffer("pe", pe)
 
     def forward(self, x):
-        x = x + self.pe[:x.size(0), :]
+        x = x + self.pe[: x.size(0), :]
         return self.dropout(x)
 
 
@@ -134,7 +119,8 @@ class PoswiseFeedForwardNet(nn.Module):
         self.fc = nn.Sequential(
             nn.Linear(d_model, d_ff, bias=False),
             nn.ReLU(),
-            nn.Linear(d_ff, d_model, bias=False))
+            nn.Linear(d_ff, d_model, bias=False),
+        )
         self.ln = nn.LayerNorm(d_model)
 
     def forward(self, inputs):
@@ -146,13 +132,47 @@ class PoswiseFeedForwardNet(nn.Module):
 class Adapter(nn.Module):
     def __init__(self, embed_dim, model_dim, dropout):
         super(Adapter, self).__init__()
-        self.dense = nn.Sequential(nn.Linear(embed_dim, model_dim),
-                                   nn.ReLU(),
-                                   # nn.Linear(model_dim, model_dim),
-                                   nn.BatchNorm1d(model_dim),
-                                   nn.Dropout(dropout))
+        self.dense = nn.Sequential(
+            nn.Linear(embed_dim, model_dim),
+            nn.ReLU(),
+            # nn.Linear(model_dim, model_dim),
+            nn.BatchNorm1d(model_dim),
+            nn.Dropout(dropout),
+        )
 
     def forward(self, inputs):
+        outputs = self.dense(inputs)
+        return outputs
+
+
+class AdapterStack(nn.Module):
+    def __init__(self, num_layers, embed_dim, bottleneck_dim, dropout):
+        super(AdapterStack, self).__init__()
+        layers = []
+
+        for i in range(num_layers):
+            input_dim = embed_dim if i == 0 else bottleneck_dim
+            layers.append(Adapter(input_dim, bottleneck_dim, dropout))
+
+        self.adapters = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.adapters(x)
+
+
+class Adapter_layernorm(nn.Module):
+    def __init__(self, embed_dim, model_dim, dropout):
+        super(Adapter_layernorm, self).__init__()
+        self.dense = nn.Sequential(
+            nn.Linear(embed_dim, model_dim),
+            nn.ReLU(),
+            # nn.Linear(model_dim, model_dim),
+            nn.LayerNorm(model_dim),
+            nn.Dropout(dropout),
+        )
+
+    def forward(self, inputs):
+        inputs = inputs.reshape(inputs.size(0), 20, -1)
         outputs = self.dense(inputs)
         return outputs
 
@@ -161,11 +181,14 @@ class Predictor(nn.Module):
     def __init__(self, hidd_feat_dim, model_dim, dropout):
         super(Predictor, self).__init__()
 
-        self.clf = nn.Sequential(nn.Dropout(2.0 * dropout),
-                                 nn.Linear(hidd_feat_dim, model_dim),
-                                 nn.ReLU(),
-                                 nn.Dropout(2.0 * dropout),
-                                 nn.Linear(model_dim, 1))
+        self.clf = nn.Sequential(
+            nn.Dropout(2.0 * dropout),
+            nn.Linear(hidd_feat_dim, model_dim),
+            nn.ReLU(),
+            nn.Dropout(2.0 * dropout),
+            nn.Linear(model_dim, 1),
+            nn.ReLU(),
+        )
 
     def forward(self, inputs):
         outputs = self.clf(inputs)
@@ -195,8 +218,12 @@ class Decoder(nn.Module):
 
         dec_self_attentions, dec_enc_attentions = [], []
         for layer in self.layers:
-            dec_outputs, dec_self_attention, dec_enc_attention = layer(dec_outputs, enc_outputs,
-                                                                       dec_self_attention_mask, dec_enc_attention_mask)
+            dec_outputs, dec_self_attention, dec_enc_attention = layer(
+                dec_outputs,
+                enc_outputs,
+                dec_self_attention_mask,
+                dec_enc_attention_mask,
+            )
             dec_self_attentions.append(dec_self_attention)
             dec_enc_attentions.append(dec_enc_attention)
         return dec_outputs, dec_self_attentions, dec_enc_attentions
@@ -222,34 +249,30 @@ class DecoderLayer(nn.Module):
 class Generator(nn.Module):
     def __init__(self, d_model, vocab=5):
         super(Generator, self).__init__()
-        self.proj = nn.Sequential(nn.Linear(d_model, d_model),
-                                  nn.ReLU(),
-                                  nn.Linear(d_model, vocab))
+        self.proj = nn.Sequential(nn.Linear(d_model, d_model), nn.ReLU(), nn.Linear(d_model, vocab))
 
     def forward(self, x):
         return self.proj(x)
 
 
-class FullModel_guidance_RNA_FM(nn.Module):
+class FullModel_guidance(nn.Module):
     def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout):
-        super(FullModel_guidance_RNA_FM, self).__init__()
+        super().__init__()
 
-        self.adapter = Adapter(embed_dim=input_dim,
-                               model_dim=model_dim,
-                               dropout=dropout)
+        self.adapter = Adapter(embed_dim=input_dim, model_dim=model_dim, dropout=dropout)
 
-        self.predictor = Predictor(hidd_feat_dim=model_dim,
-                                   model_dim=model_dim,
-                                   dropout=dropout)
+        self.predictor = Predictor(hidd_feat_dim=model_dim, model_dim=model_dim, dropout=dropout)
 
-        self.decoder = Decoder(tgt_size=tgt_size,
-                               n_layers=n_declayers,
-                               d_model=model_dim,
-                               d_ff=d_ff,
-                               d_k=d_k_v,
-                               d_v=d_k_v,
-                               n_heads=n_heads,
-                               dropout=dropout)
+        self.decoder = Decoder(
+            tgt_size=tgt_size,
+            n_layers=n_declayers,
+            d_model=model_dim,
+            d_ff=d_ff,
+            d_k=d_k_v,
+            d_v=d_k_v,
+            n_heads=n_heads,
+            dropout=dropout,
+        )
         self.generator = Generator(model_dim, vocab=tgt_size)
 
     def forward(self, rna_emds, rna_seq):
@@ -261,26 +284,25 @@ class FullModel_guidance_RNA_FM(nn.Module):
         return bind_scores, pred_seq
 
 
-class FullModel_guidance_Evo(nn.Module):
-    def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout):
-        super(FullModel_guidance_Evo, self).__init__()
+class FullModel_guidance_stack(nn.Module):
+    def __init__(self, num_layers, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout):
+        super().__init__()
 
-        self.adapter = Adapter(embed_dim=input_dim,
-                               model_dim=model_dim,
-                               dropout=dropout)
+        self.adapter = AdapterStack(num_layers=num_layers, embed_dim=input_dim, bottleneck_dim=model_dim,
+                                    dropout=dropout)
 
-        self.predictor = Predictor(hidd_feat_dim=model_dim,
-                                   model_dim=model_dim,
-                                   dropout=dropout)
+        self.predictor = Predictor(hidd_feat_dim=model_dim, model_dim=model_dim, dropout=dropout)
 
-        self.decoder = Decoder(tgt_size=tgt_size,
-                               n_layers=n_declayers,
-                               d_model=model_dim,
-                               d_ff=d_ff,
-                               d_k=d_k_v,
-                               d_v=d_k_v,
-                               n_heads=n_heads,
-                               dropout=dropout)
+        self.decoder = Decoder(
+            tgt_size=tgt_size,
+            n_layers=n_declayers,
+            d_model=model_dim,
+            d_ff=d_ff,
+            d_k=d_k_v,
+            d_v=d_k_v,
+            n_heads=n_heads,
+            dropout=dropout,
+        )
         self.generator = Generator(model_dim, vocab=tgt_size)
 
     def forward(self, rna_emds, rna_seq):
@@ -291,3 +313,130 @@ class FullModel_guidance_Evo(nn.Module):
 
         return bind_scores, pred_seq
 
+
+class FullModelGru(nn.Module):
+    def __init__(self, input_dim, model_dim, vocab_size, num_gru_layers, dropout):
+        super().__init__()
+
+        self.adapter = Adapter_layernorm(embed_dim=input_dim, model_dim=model_dim, dropout=dropout)
+
+        self.predictor = Predictor(hidd_feat_dim=int(model_dim * 20), model_dim=model_dim, dropout=dropout)
+
+        self.embed = nn.Embedding(vocab_size, model_dim)
+
+        self.gru = nn.GRU(
+            input_size=model_dim,
+            hidden_size=model_dim,
+            num_layers=num_gru_layers,
+            batch_first=True,
+            dropout=dropout if num_gru_layers > 1 else 0,
+        )
+
+        self.generator = Generator(model_dim, vocab=vocab_size)
+
+    def init_hidden(self, batch_size, device=None):
+        if device is None:
+            device = next(self.parameters()).device
+        return torch.zeros(self.gru.num_layers, batch_size, self.gru.hidden_size, device=device)
+
+    def forward(self, seq_rep, seq):
+        hidd_feats = self.adapter(seq_rep)
+
+        flat_feats = hidd_feats.reshape(hidd_feats.size(0), -1)
+        bind_scores = self.predictor(flat_feats)
+
+        hidden = self.init_hidden(seq_rep.size(0), seq_rep.device)
+        _, hidden = self.gru(hidd_feats, hidden)
+        x = self.embed(seq)
+        x, _ = self.gru(x, hidden)
+
+        pred_seq = self.generator(x)
+
+        return bind_scores, pred_seq
+
+
+class FullModelCNN(nn.Module):
+    """
+    No LLM
+    feats: one-hot
+    with guidance
+    """
+
+    def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout):
+        super(FullModelCNN, self).__init__()
+
+        self.cnn = nn.Sequential(
+            nn.Conv1d(input_dim, model_dim, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm1d(model_dim),
+            nn.ReLU(),
+            nn.Conv1d(model_dim, model_dim, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm1d(model_dim),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool1d(1),
+            nn.Dropout(0.2),
+        )
+
+        self.predictor = Predictor(hidd_feat_dim=int(model_dim), model_dim=model_dim, dropout=dropout)
+
+        self.decoder = Decoder(
+            tgt_size=tgt_size,
+            n_layers=n_declayers,
+            d_model=model_dim,
+            d_ff=d_ff,
+            d_k=d_k_v,
+            d_v=d_k_v,
+            n_heads=n_heads,
+            dropout=dropout,
+        )
+        self.generator = Generator(model_dim, vocab=tgt_size)
+
+    def forward(self, x, rna_seq):
+        # x: [batch_size, sequence_length, 4]
+        # permute to [batch_size, 4, sequence_length]
+        x = x.permute(0, 2, 1)
+        x = self.cnn(x)
+        x = x.squeeze(-1)
+        bind_scores = self.predictor(x)
+
+        # x: [batch_size,model_dim]
+        dec_outputs, _, _ = self.decoder(rna_seq, x)
+        pred_seq = self.generator(dec_outputs)
+
+        return bind_scores, pred_seq
+
+
+class LSTMEncoder(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size=128, num_layers=1):
+        super(LSTMEncoder, self).__init__()
+        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True)
+        self.linear = nn.Linear(hidden_size, output_size)
+
+    def forward(self, x):
+        outputs, (hidden, cell) = self.lstm(x)
+
+        last_hidden = hidden[-1]
+
+        context_vector = self.linear(last_hidden)
+
+        return context_vector
+
+
+class FullModel_guidance_LSTM(nn.Module):
+    def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout):
+        super(FullModel_guidance_LSTM, self).__init__()
+
+        self.lstm = LSTMEncoder(input_size=input_dim, hidden_size=256, output_size=model_dim, num_layers=1)
+
+        self.predictor = Predictor(hidd_feat_dim=model_dim, model_dim=model_dim, dropout=dropout)
+
+        self.decoder = Decoder(tgt_size=tgt_size, n_layers=n_declayers, d_model=model_dim, d_ff=d_ff, d_k=d_k_v,
+                               d_v=d_k_v, n_heads=n_heads, dropout=dropout)
+        self.generator = Generator(model_dim, vocab=tgt_size)
+
+    def forward(self, rna_emds, rna_seq):
+        hidd_feats = self.lstm(rna_emds)
+        bind_scores = self.predictor(hidd_feats)
+        dec_outputs, _, _ = self.decoder(rna_seq, hidd_feats)
+        pred_seq = self.generator(dec_outputs)
+
+        return bind_scores, pred_seq
