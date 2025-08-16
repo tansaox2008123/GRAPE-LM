@@ -1,28 +1,41 @@
 # -*- coding: utf-8 -*-
 import os
-import re
 import random
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
 import fm
 import argparse
 from evo import Evo
-
-from model import *
-
-#  If you have any internet error please try this code with your proxy setting.
-#  os.environ["http_proxy"] = "http://...:8888"
-#  os.environ["https_proxy"] = "http://...:8888"
-
+import numpy as np
+from model_zh import FullModel_guidance, FullModel_guidance_LSTM, FullModelGru, FullModelCNN
+from tqdm import tqdm
+from pathlib import Path
 
 
 # GRAPE generation method
-def greedy_decode_guidance(model, input_src, max_len, start_symbol, is_noise, device):
-    if is_noise:
-        input_src = add_gaussian_noise(input_src, device, mean=0.0, std=0.1)
-    memory = model.adapter(input_src)
+def greedy_decode_guidance(model, input_src, max_len, start_symbol, is_noise, noise, device):
+    if args.feature == "one-hot":
+        input_src = input_src.squeeze(0)
+        rna1, rna2 = input_src
+        rna1, rna2 = rna1.unsqueeze(0), rna2.unsqueeze(0)
+
+        if args.arch == "cnn":
+            rna1 = rna1.permute(0, 2, 1)
+            rna2 = rna2.permute(0, 2, 1)
+
+        memory1 = model.adapter(rna1)
+        memory2 = model.adapter(rna2)
+        # memory1 = model.lstm(rna1)
+        # memory2 = model.lstm(rna2)
+
+        memory = ((memory1 + memory2) / 2).squeeze(-1)
+        if is_noise:
+            memory += noise
+
+    else:
+        if is_noise:
+            input_src += noise
+        memory = model.adapter(input_src)
+
     ys = torch.ones(1, 1).fill_(start_symbol).type_as(input_src.data).long()
     for i in range(max_len):
         out = model.decoder(ys, memory)
@@ -30,252 +43,307 @@ def greedy_decode_guidance(model, input_src, max_len, start_symbol, is_noise, de
         prob = model.generator(selected_tensor[:, -1])
         _, next_word = torch.max(prob, dim=1)
         next_word = next_word.item()
-        ys = torch.cat([ys,
-                        torch.ones(1, 1).type_as(input_src.data).fill_(next_word)], dim=1).long()
+        ys = torch.cat([ys, torch.ones(1, 1).type_as(input_src.data).fill_(next_word)], dim=1).long()
+
     return ys
 
 
-def add_gaussian_noise(tensor, device, mean=0.0, std=1.0):
-    noise = torch.randn(tensor.size()).to(device) * std + mean
-    noisy_tensor = tensor + noise
-    return noisy_tensor
+# GRU verison
+def gru_predict_sequence(model, input_seq, max_len, start_symbol, is_noise, noise, device):
+    if is_noise:
+        input_seq += noise
+
+    h = model.adapter(input_seq)
+    _, hidden = model.gru(
+        h,
+        torch.zeros(model.gru.num_layers, 1, model.gru.hidden_size, device=device),
+    )
+
+    current = torch.empty(1, 1).fill_(start_symbol).long().to(device)
+
+    generated_ids = []
+    for i in range(max_len):
+        current = model.embed(current)
+        gru_out, hidden = model.gru(current, hidden)
+        pred = model.generator(gru_out)  # [1, 1, vocab_size]
+        pred = torch.softmax(pred, -1)
+        next_token = torch.argmax(pred, -1)  # [1, 1]
+        generated_ids.append(next_token.item())
+        current = next_token
+
+    return generated_ids
+
+
+def gaussian_noise(size, mean=0.0, std=1.0):
+    noise = torch.randn(size) * std + mean
+    return noise
 
 
 def standardization(data):
-    mu = np.mean(data, axis=0)
-    sigma = np.std(data, axis=0)
+    mu = torch.mean(data, dim=-1, keepdim=True)
+    sigma = torch.std(data, dim=-1, keepdim=True)
     return (data - mu) / sigma
 
 
-def convert_to_rna_sequence_rna_fm(data):
-    # 创建映射字典
-    rna_to_num = {'A': 1, 'C': 2, 'G': 3, 'U': 4}
+def rna_to_numbers(seq):
+    base_to_num = {"A": 1, "C": 2, "G": 3, "U": 4}
 
-    # 将RNA序列转换为数字
-    numbers = [rna_to_num.get(base, -1) for base in data.upper()]
+    numbers = [base_to_num.get(base, -1) for base in seq.upper()]
 
     return numbers
 
 
-def get_rna_fm_model(device):
+def rna_to_onehot(seq):
+    mapping = {"A": 0, "C": 1, "G": 2, "U": 3}
+    onehot = np.zeros((len(seq), 4), dtype=np.float32)
+    for i, base in enumerate(seq.upper()):
+        if base in mapping:
+            onehot[i, mapping[base]] = 1.0
+    if args.arch == "base":
+        onehot = onehot.reshape(-1)
+    return onehot
+
+
+def run_rna_fm(rna_fm_inputs, device, batch_size=5000):
+    rna_fm_model, alphabet = fm.pretrained.rna_fm_t12()
+    batch_converter = alphabet.get_batch_converter()
+    rna_fm_model.to(device)
+    rna_fm_model.eval()
+
+    all_reps = []
+    with tqdm(total=len(rna_fm_inputs), desc="RNA-FM") as pbar:
+        for i in range(0, len(rna_fm_inputs), batch_size):
+            batch_inputs = rna_fm_inputs[i : i + batch_size]
+            batch_labels, batch_strs, batch_tokens = batch_converter(batch_inputs)
+            batch_tokens = batch_tokens.to(device)
+
+            with torch.no_grad():
+                results = rna_fm_model(batch_tokens, repr_layers=[12])
+
+            reps = results["representations"][12]
+            reps = reps[:, 1:-1, :].detach().cpu().float()
+            reps = reps.reshape(reps.shape[0], -1)
+            all_reps.append(reps)
+
+            pbar.update(len(batch_inputs))
+
+    del rna_fm_model
     torch.cuda.empty_cache()
 
-    EmbbingModel, alphabet = fm.pretrained.rna_fm_t12()
-    batch_converter = alphabet.get_batch_converter()
-    EmbbingModel.to(device)
-    EmbbingModel.eval()
-
-    return EmbbingModel, batch_converter
+    return torch.cat(all_reps, dim=0)
 
 
-def get_evo_model():
-    evo_model = Evo('evo-1-8k-base')
+def run_evo(evo_inputs, device, batch_size=1000):
+    evo_model = Evo("evo-1-8k-base")
     model, tokenizer = evo_model.model, evo_model.tokenizer
-
-    return model, tokenizer
-
-
-def rna_seq_embbding(OriginSeq, batch_converter, EmbeddingModel, device):
-    EmbeddingModel = EmbeddingModel.to(device)
-    batch_labels, batch_strs, batch_tokens = batch_converter(OriginSeq)
-    batch_tokens = batch_tokens.to(device)
-
-    with torch.no_grad():
-        results = EmbeddingModel(batch_tokens, repr_layers=[12])
-    token_embeddings = results["representations"][12][0]
-
-    return token_embeddings
-
-
-def get_rna_fm_embedding(seq, batch_converter, EmbbingModel, device):
-    rna_seq = ("undefined", seq)
-    seq_unused = ('UNUSE', 'ACGU')
-    all_rna = []
-    all_rna.append(rna_seq)
-    all_rna.append(seq_unused)
-
-    rna_fm = rna_seq_embbding(all_rna, batch_converter, EmbbingModel, device)
-    rna_fm = rna_fm[1:-1, :]
-    rna_fm = rna_fm.cpu().numpy()
-
-    return rna_fm
-
-
-def get_evo_embedding(seq, model, tokenizer, device):
-    sequence = seq
-
-    input_ids = torch.tensor(
-        tokenizer.tokenize(sequence),
-        dtype=torch.int,
-    ).to(device).unsqueeze(0)
-
-    with torch.no_grad():
-        logits, _ = model(input_ids)
-
-    logits = logits.detach()
-    logits = logits.float()
-    cpu_logits = logits.cpu()
-
-    rna_evo = cpu_logits.numpy()
-
-    return rna_evo
-
-
-def get_sample_AE_rna_fm(low, high, num, input_file, device):
-    EmbbingModel, batch_converter = get_rna_fm_model(device)
-    with open(input_file, 'r') as file:
-        lines = file.readlines()
-
-    rnas = []
-    for _ in range(num):
-        i = random.randint(low, high)
-        j = random.randint(low, high)
-
-        line_1 = lines[i].split()[-1]
-        line_2 = lines[j].split()[-1]
-
-        rna_fm1 = get_rna_fm_embedding(line_1, batch_converter, EmbbingModel, device)
-        rna_fm2 = get_rna_fm_embedding(line_2, batch_converter, EmbbingModel, device)
-
-        rna_fm = (rna_fm1 + rna_fm2) / 2
-
-        rna_fm = rna_fm.reshape(-1)
-        rna_fm = standardization(rna_fm)
-
-        rnas.append(rna_fm)
-    rnas = torch.tensor(rnas).to(device)
-    return rnas
-
-
-def get_sample_AE_evo(low, high, num, input_file, device):
-    model, tokenizer = get_evo_model()
     model.to(device)
     model.eval()
 
-    with open(input_file, 'r') as file:
-        lines = file.readlines()
+    all_reps = []
+    with tqdm(total=len(evo_inputs), desc="EVO") as pbar:
+        for i in range(0, len(evo_inputs), batch_size):
+            batch_inputs = evo_inputs[i : i + batch_size]
+            input_ids_tensor = torch.stack([torch.tensor(tokenizer.tokenize(seq), dtype=torch.int) for seq in batch_inputs]).to(device)
+            with torch.no_grad():
+                logits, _ = model(input_ids_tensor)
 
-    rnas = []
-    for _ in range(num):
-        i = random.randint(low, high)
-        j = random.randint(low, high)
+            logits = logits.detach().cpu().float()
+            logits = logits.reshape(logits.shape[0], -1)
+            all_reps.append(logits)
 
-        line_1 = lines[i].split()[-1]
-        line_2 = lines[j].split()[-1]
+            pbar.update(len(batch_inputs))
 
-        rna_fm1 = get_evo_embedding(line_1, model, tokenizer, device)
-        rna_fm2 = get_evo_embedding(line_2, model, tokenizer, device)
+    del evo_model
+    torch.cuda.empty_cache()
 
-        rna_fm = (rna_fm1 + rna_fm2) / 2
-
-        rna_fm = rna_fm.reshape(-1)
-        rna_fm = standardization(rna_fm)
-
-        rnas.append(rna_fm)
-    rnas = torch.tensor(rnas).to(device)
-    return rnas
+    return torch.cat(all_reps, dim=0)
 
 
+def get_samples(feature, low, high, num, input_file, use_saved_samples, sample_seqs_file, device):
+    seqs1 = []
+    seqs2 = []
+    if not use_saved_samples:
+        with open(input_file, "r") as file:
+            lines = file.readlines()
+        for _ in range(num):
+            i = random.randint(low, high)
+            j = random.randint(low, high)
+            seqs1.append(lines[i].split()[-1])
+            seqs2.append(lines[j].split()[-1])
 
-def generation_guidance_rna_fm(input_file, output_file, model_name, num, device):
-    model_name_2 = f'model/{model_name}'
+        sample_seqs = [(seq1, seq2) for seq1, seq2 in zip(seqs1, seqs2)]
+        with open(sample_seqs_file, "w") as f:
+            for seq1, seq2 in sample_seqs:
+                f.write(f"{seq1}\t{seq2}\n")
+    else:
+        with open(sample_seqs_file, "r") as file:
+            for line in file:
+                seq1, seq2 = line.strip().split("\t")
+                seqs1.append(seq1)
+                seqs2.append(seq2)
 
-    model = torch.load(model_name_2)
+    if feature == "rna-fm":
+        reps = run_rna_fm([(i, seq) for i, seq in enumerate(seqs1 + seqs2)], device)
+        reps = standardization(reps)
+        reps = (reps[:num] + reps[num:]) / 2
+    elif feature == "evo":
+        reps = run_evo(seqs1 + seqs2, device)
+        reps = standardization(reps)
+        reps = (reps[:num] + reps[num:]) / 2
+    elif feature == "one-hot":
+        reps = []
+        for seq1, seq2 in zip(seqs1, seqs2):
+            one_hot1 = rna_to_onehot(seq1)
+            one_hot2 = rna_to_onehot(seq2)
+            reps.append((one_hot1, one_hot2))
+        reps = torch.from_numpy(np.asarray(reps))
+
+    return reps
+
+
+def generation(
+    model_name,
+    input_file,
+    output_file,
+    low,
+    high,
+    gen_num,
+    device,
+    use_saved_samples=False,
+):
+    arch, feature, *_ = model_name.split("_")
+    input_dim = {"rna-fm": 12800, "evo": 10240, "one-hot": 80}
+    if arch == "base":
+        model = FullModel_guidance(
+            input_dim=input_dim[feature],
+            model_dim=128,
+            tgt_size=5,
+            n_declayers=2,
+            d_ff=128,
+            d_k_v=64,
+            n_heads=2,
+            dropout=0.05,
+        )
+    elif arch == "gru":
+        model = FullModelGru(
+            input_dim=input_dim[feature] // 20,
+            model_dim=128,
+            vocab_size=5,
+            num_gru_layers=2,
+            dropout=0.05,
+        )
+    elif arch == "cnn":
+        model = FullModelCNN(
+            input_dim=4,
+            model_dim=128,
+            tgt_size=5,
+            n_declayers=2,
+            d_ff=128,
+            d_k_v=64,
+            n_heads=2,
+            dropout=0.05,
+        )
+    elif arch == "lstm":
+        model = FullModel_guidance_LSTM(
+            input_dim=4,
+            model_dim=128,
+            tgt_size=5,
+            n_declayers=2,
+            d_ff=128,
+            d_k_v=64,
+            n_heads=2,
+            dropout=0.05,
+        )
+    model.load_state_dict(torch.load(f"./model/{model_name}"))
+    model.to(device)
     model.eval()
-    model = model.to(device)
 
-    with open(input_file, 'r') as file:
-        lines = file.readlines()
-        num_lines = len(lines)
+    os.makedirs("samples", exist_ok=True)
 
-    random_rnas = []
+    sample_seqs_file = f"samples/{Path(output_file).stem}_samples.txt"
+    noises_file = f"samples/{Path(output_file).stem}_noises.pt"
 
-    rnas = get_sample_AE_rna_fm(0, num_lines - 1, num, input_file, device)
-    for rna_input in rnas:
-        random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
-        random_seq = greedy_decode_guidance(model, random_rna_inputs, 20, 0, True, device)
-        
-        id_to_base = {1: 'A', 2: 'C', 3: 'G', 4: 'U'}
+    samples = get_samples(feature, low, high, gen_num, input_file, use_saved_samples, sample_seqs_file, device)
 
-        sequence_ids = random_seq[0].tolist()
-        rna_sequence = ''.join([id_to_base.get(i, '') for i in sequence_ids])  
-        print(rna_sequence)
-        random_rnas.append(rna_sequence)
+    generated_seqs = []
 
-    with open(output_file, 'w') as file2:
-        for line in random_rnas:
-            file2.write(str(line) + '\n')
+    if not use_saved_samples:
+        if args.feature == "one-hot":
+            noises = [gaussian_noise((128,), mean=0.0, std=0.1) for _ in range(gen_num)]
+        else:
+            noises = [gaussian_noise(samples[0].size(), mean=0.0, std=0.1) for _ in range(gen_num)]
+        torch.save(noises, f"samples/{Path(output_file).stem}_noises.pt")
+    else:
+        noises = torch.load(noises_file, map_location="cpu")
 
+    assert len(samples) == len(noises), "Samples and noises must have the same length."
 
-def generation_guidance_evo(input_file, output_file, model_name, num, device):
-    model_name_2 = f'model/{model_name}'
+    for sample, noise in tqdm(zip(samples, noises), total=len(samples), desc="Generating sequences"):
+        sample = sample.unsqueeze(0).to(device)
+        noise = noise.unsqueeze(0).to(device)
+        if arch == "gru":
+            generated_seq = gru_predict_sequence(model, sample, 20, 0, True, noise, device)
+        else:
+            generated_seq = greedy_decode_guidance(model, sample, 20, 0, True, noise, device)
+            generated_seq = generated_seq.squeeze().tolist()
 
-    model = torch.load(model_name_2)
-    model.eval()
-    model = model.to(device)
+        id_to_base = {1: "A", 2: "C", 3: "G", 4: "U"}
 
-    with open(input_file, 'r') as file:
-        lines = file.readlines()
-        num_lines = len(lines)
+        rna_sequence = "".join([id_to_base.get(i, "") for i in generated_seq])
+        generated_seqs.append(rna_sequence)
 
-    random_rnas = []
-
-    # rnas = get_sample_AE_evo(0, num_lines - 1, num, input_file, device)
-    rnas = get_sample_AE_evo(0, num_lines, num, input_file, device)
-    for rna_input in rnas:
-        random_rna_inputs = torch.tensor(rna_input).unsqueeze(0).to(device)
-        random_seq = greedy_decode_guidance(model, random_rna_inputs, 20, 0, True, device)
-        
-        id_to_base = {1: 'A', 2: 'C', 3: 'G', 4: 'U'}
-
-        sequence_ids = random_seq[0].tolist()
-        rna_sequence = ''.join([id_to_base.get(i, '') for i in sequence_ids])  
-        print(rna_sequence)
-        random_rnas.append(rna_sequence)
-
-    with open(output_file, 'w') as file2:
-        for line in random_rnas:
-            file2.write(str(line) + '\n')
+    with open(output_file, "w", buffering=1) as file2:
+        for line in generated_seqs:
+            file2.write(str(line) + "\n")
 
 
 def main():
+    global args
     parser = argparse.ArgumentParser(description="Choose which function to run.")
-    parser.add_argument('function', choices=['1', '2', '3', '4', '5'], help="Function to run")
-    parser.add_argument('--cuda', type=str, default="0", help="CUDA device ID (e.g., '0', '1', '2')")
-    parser.add_argument('--input_file', type=str, help="-----")
-    parser.add_argument('--output_file', type=str, help="-----")
-    parser.add_argument('--model_name', type=str, help="-----")
-    parser.add_argument('--num', type=int, help="-----")
+    parser.add_argument("model_name", type=str)
+    parser.add_argument("input_file", type=str, default="")
+    parser.add_argument("output_file", type=str, help="-----")
+    parser.add_argument("low", type=int)
+    parser.add_argument("high", type=int)
+    parser.add_argument("gen_num", type=int)
+    parser.add_argument("--cuda", type=str, default="0")
+    parser.add_argument("--arch", type=str)
+    parser.add_argument("--feature", type=str)
+    parser.add_argument("--use_saved_samples", action="store_true", default=False)
 
     args = parser.parse_args()
     CUDA = args.cuda
     input_file = args.input_file
     output_file = args.output_file
     model_name = args.model_name
-    num = args.num
+    low, high = args.low, args.high
+    gen_num = args.gen_num
+    use_saved_samples = args.use_saved_samples
+    arch, feature, *_ = model_name.split("_")
+    args.arch = arch
+    args.feature = feature
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = f'{CUDA}'
+    os.environ["CUDA_VISIBLE_DEVICES"] = f"{CUDA}"
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
 
-    # 根据参数选择函数
-    if args.function == '1':
-        generation_guidance_rna_fm(input_file,
-                                   output_file,
-                                   model_name,
-                                   num,
-                                   device)
-    elif args.function == '2':
-        generation_guidance_evo(input_file,
-                                output_file,
-                                model_name,
-                                num,
-                                device)
+    if use_saved_samples:
+        print(f"Using saved samples from ./samples/{Path(output_file).stem}_samples.txt and noises from ./samples/{Path(output_file).stem}_samples.pt.")
+
+    generation(
+        model_name,
+        input_file,
+        output_file,
+        low,
+        high,
+        gen_num,
+        device,
+        use_saved_samples=use_saved_samples,
+    )
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
