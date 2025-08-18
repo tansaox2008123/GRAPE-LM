@@ -32,15 +32,64 @@ Evo https://github.com/evo-design/evo
 
 ## Quickstart
 Train your own model should follow this code
-```bash
-   python train.py  base rna-fm RBD -- model_name your-model-name --k 0.001 --cuda 0
+```bashpython train.py <arch> <feature> <dataset> \
+    --cuda 0 \
+    --act_weight 0.5 \
+    --model_name myrun \
+    --k 0.001 \
+    --n 2
+
 ```
 
+**Arguments:**
+
+* `arch`: Model architecture
+  * `base` – Transformer-based model
+  * `gru` – GRU-based model
+  * `cnn` – CNN-based model
+  * `lstm` – LSTM-based model
+* `feature`: Input representation type
+  * `rna-fm` – Pre-trained RNA-FM embeddings
+  * `evo` – Evolutionary model embeddings
+  * `one-hot` – One-hot encoding of RNA sequences
+* `dataset`: Dataset name (folder under `datasets/`)
+
+**Options:**
+
+* `--cuda <id>`: GPU ID to use (default: `0`)
+* `--act_weight <float>`: Weight of activity loss relative to sequence loss
+* `--model_name <str>`: Name of the model checkpoint to save under `./model/`
+* `--batch_size <int>`: Training batch size
+* `--k <float>`: Sigmoid scaling factor for activity score
+* `--n <int>`: Number of layers (only used for `base` architecture)
+
+---
 
 generation RNA aptamers should follow this code
 ```bash
-   python generation.py model_name.model   sample-file-seq.txt   output_file.txt   0  2000   num    --cuda  0   --arch   rna-fm   --feature  base
+   python generation.py base_rna-fm_mydata_0.001_exp1.model \
+    datasets/mydata/rna_seq.txt \
+    outputs/generated.txt \
+    0 1000 50 \
+    --cuda 0
+
 ```
+
+**Arguments:**
+
+* `model_name`: Name of the trained model checkpoint (located in `./model/`)
+* `input_file`: Input dataset file (e.g., `datasets/mydata/train.txt`)
+* `output_file`: Path to save the generated RNA sequences
+* `low`: Lower bound index for sampling sequences from the input file
+* `high`: Upper bound index for sampling sequences
+* `gen_num`: Number of sequences to generate
+
+**Options:**
+
+* `--cuda <id>`: GPU ID to use (default: `0`)
+* `--arch <str>`: Model architecture (`base`, `gru`, `cnn`, `lstm`)
+* `--feature <str>`: Input feature type (`rna-fm`, `evo`, `one-hot`)
+* `--use_saved_samples`: If set, reuse previously saved samples (`samples/*.txt`) and noises (`samples/*.pt`)
 
 
 
