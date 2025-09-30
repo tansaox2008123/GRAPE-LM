@@ -59,7 +59,6 @@ python train.py <arch> <feature> <dataset> \
 * `--act_weight <float>`: Weight of activity loss relative to sequence loss
 * `--model_name <str>`: Name of the model checkpoint to save under `./model/`
 * `--batch_size <int>`: Training batch size
-* `--k <float>`: Sigmoid scaling factor for activity score
 * `--n <int>`: Number of layers (only used for `base` architecture)
 
 ---
