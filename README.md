@@ -32,13 +32,12 @@ Evo https://github.com/evo-design/evo
 
 ## Quickstart
 Train your own model should follow this code
-```bashpython train.py <arch> <feature> <dataset> \
+```bash
+python train.py <arch> <feature> <dataset> \
     --cuda 0 \
     --act_weight 0.5 \
     --model_name myrun \
-    --k 0.001 \
     --n 2
-
 ```
 
 **Arguments:**
