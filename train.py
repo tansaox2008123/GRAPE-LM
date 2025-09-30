@@ -8,7 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 import torchmetrics
 import time
 import numpy as np
-from model import FullModel_guidance, FullModel_guidance_LSTM, FullModelGru, FullModelCNN , FullModel_guidance_stack
+from model_zh import FullModel_guidance, FullModel_guidance_LSTM, FullModelGru, FullModelCNN
 import fm
 from evo import Evo
 import argparse
@@ -16,7 +16,7 @@ from torchmetrics.regression import R2Score
 from torchmetrics.functional import pearson_corrcoef
 from tqdm import tqdm
 import glob
-
+from multimolecule import RnaTokenizer, RnaBertModel
 
 def sigmoid(x, k):
     return 1 / (1 + np.exp(-k * x))
@@ -53,7 +53,7 @@ def get_act_score(cluster_reads, seq_reads):
     cluster_socre = (sigmoid(cluster_reads, k) - 0.5) * 2.0
     seq_socre = (sigmoid(seq_reads, k) - 0.5) * 2.0
 
-    return (cluster_socre * 0.95 + seq_socre * 0.05)
+    return (cluster_socre + seq_socre) / 2
 
 
 def load_cache(save_name, method):
@@ -65,7 +65,7 @@ def load_cache(save_name, method):
         yield standardization(rna_reps)
 
 
-def run_rna_fm(rna_fm_inputs, device, save_name, batch_size=2000):
+def run_rna_fm(rna_fm_inputs, device, save_name, batch_size=1000):
     cache_files = glob.glob(f"./datasets/{args.dataset}/{save_name}_RNA-FM_*-*.pt")
     if cache_files:
         expected_chunks_num = int(os.path.splitext(cache_files[0])[0].split("_")[-1].split("-")[-1]) + 1
@@ -90,7 +90,7 @@ def run_rna_fm(rna_fm_inputs, device, save_name, batch_size=2000):
     chunk_num = (batch_num + batch_per_chunk - 1) // batch_per_chunk
     with tqdm(total=len(rna_fm_inputs), desc="RNA-FM") as pbar:
         for i in range(0, len(rna_fm_inputs), batch_size):
-            batch_inputs = rna_fm_inputs[i: i + batch_size]
+            batch_inputs = rna_fm_inputs[i : i + batch_size]
             batch_labels, batch_strs, batch_tokens = batch_converter(batch_inputs)
             batch_tokens = batch_tokens.to(device)
 
@@ -154,9 +154,8 @@ def run_evo(evo_inputs, device, save_name, batch_size=1000):
     chunk_num = (batch_num + batch_per_chunk - 1) // batch_per_chunk
     with tqdm(total=len(evo_inputs), desc="EVO") as pbar:
         for i in range(0, len(evo_inputs), batch_size):
-            batch_inputs = evo_inputs[i: i + batch_size]
-            input_ids_tensor = torch.stack(
-                [torch.tensor(tokenizer.tokenize(seq), dtype=torch.int) for seq in batch_inputs]).to(device)
+            batch_inputs = evo_inputs[i : i + batch_size]
+            input_ids_tensor = torch.stack([torch.tensor(tokenizer.tokenize(seq), dtype=torch.int) for seq in batch_inputs]).to(device)
             with torch.no_grad():
                 logits, _ = model(input_ids_tensor)
 
@@ -192,6 +191,200 @@ def run_evo(evo_inputs, device, save_name, batch_size=1000):
     return load_cache(save_name, "EVO")
 
 
+def run_evo_2_7b(rna_fm_inputs, device, save_name, batch_size=20000):
+    cache_files = glob.glob(f"./datasets/{args.dataset}/{save_name}_RNA-FM_*-*.pt")
+    if cache_files:
+        expected_chunks_num = int(os.path.splitext(cache_files[0])[0].split("_")[-1].split("-")[-1]) + 1
+        if expected_chunks_num != len(cache_files):
+            for file in cache_files:
+                print(f"Removing incomplete cache file: {file}")
+                os.remove(file)
+        else:
+            return load_cache(save_name, "RNA-FM")
+
+    print(f"Generating {args.dataset} RNA-FM {save_name} data...")
+
+    rna_fm_model, alphabet = fm.pretrained.rna_fm_t12()
+    batch_converter = alphabet.get_batch_converter()
+    rna_fm_model.to(device)
+    rna_fm_model.eval()
+
+    all_reps = []
+    batch_per_chunk: int = 50
+    chunk = 0
+    batch_num = (len(rna_fm_inputs) + batch_size - 1) // batch_size
+    chunk_num = (batch_num + batch_per_chunk - 1) // batch_per_chunk
+    with tqdm(total=len(rna_fm_inputs), desc="RNA-FM") as pbar:
+        for i in range(0, len(rna_fm_inputs), batch_size):
+            batch_inputs = rna_fm_inputs[i : i + batch_size]
+            batch_labels, batch_strs, batch_tokens = batch_converter(batch_inputs)
+            batch_tokens = batch_tokens.to(device)
+
+            with torch.no_grad():
+                results = rna_fm_model(batch_tokens, repr_layers=[12])
+
+            reps = results["representations"][12]
+            reps = reps[:, 1:-1, :].detach().cpu().float()
+            reps = reps.reshape(reps.shape[0], -1)
+            all_reps.append(reps)
+            if len(all_reps) == batch_per_chunk:
+                rna_reps = torch.cat(all_reps, dim=0)
+                del all_reps
+                gc.collect()
+                torch.save(
+                    rna_reps,
+                    f"./datasets/{args.dataset}/{save_name}_RNA-FM_{chunk}-{chunk_num - 1}.pt",
+                )
+                chunk += 1
+                all_reps = []
+
+            pbar.update(len(batch_inputs))
+
+    if len(all_reps) > 0:
+        rna_reps = torch.cat(all_reps, dim=0)
+        del all_reps
+        gc.collect()
+        torch.save(
+            rna_reps,
+            f"./datasets/{args.dataset}/{save_name}_RNA-FM_{chunk}-{chunk_num - 1}.pt",
+        )
+
+    del rna_fm_model
+    gc.collect()
+
+    return load_cache(save_name, "RNA-FM")
+
+
+
+def run_rnabert(rna_bert_inputs, device, save_name, batch_size=5000):
+    cache_files = glob.glob(f"./datasets/{args.dataset}/{save_name}_RNABERT_*-*.pt")
+    if cache_files:
+        expected_chunks_num = int(os.path.splitext(cache_files[0])[0].split("_")[-1].split("-")[-1]) + 1
+        if expected_chunks_num != len(cache_files):
+            for file in cache_files:
+                print(f"Removing incomplete cache file: {file}")
+                os.remove(file)
+        else:
+            return load_cache(save_name, "RNABERT")
+
+    print(f"Generating {args.dataset} RNABERT {save_name} data...")
+
+    tokenizer = RnaTokenizer.from_pretrained("multimolecule/rnabert")
+    rna_bert_model = RnaBertModel.from_pretrained("multimolecule/rnabert").to(device)
+    rna_bert_model.to(device)
+    rna_bert_model.eval()
+
+    all_reps = []
+    batch_per_chunk: int = 50
+    chunk = 0
+    batch_num = (len(rna_bert_inputs) + batch_size - 1) // batch_size
+    chunk_num = (batch_num + batch_per_chunk - 1) // batch_per_chunk
+    with tqdm(total=len(rna_bert_inputs), desc="RNABERT") as pbar:
+        for i in range(0, len(rna_bert_inputs), batch_size):
+            batch_inputs = rna_bert_inputs[i : i + batch_size]
+
+            input = tokenizer(batch_inputs, return_tensors="pt")
+            input = {k: v.to(device) for k, v in input.items()}
+            with torch.no_grad():
+                encoder_outputs = rna_bert_model(**input)  # output is BaseModelOutput...
+            encoder_hidden_states = encoder_outputs.last_hidden_state
+            encoder_hidden_states = encoder_hidden_states[:, 1:-1, :]
+            # hidden_states_numpy = encoder_hidden_states.detach().cpu().numpy()
+
+            reps = encoder_hidden_states.reshape(encoder_hidden_states.shape[0], -1)
+            all_reps.append(reps)
+            if len(all_reps) == batch_per_chunk:
+                rna_reps = torch.cat(all_reps, dim=0)
+                del all_reps
+                gc.collect()
+                torch.save(
+                    rna_reps,
+                    f"./datasets/{args.dataset}/{save_name}_RNABERT_{chunk}-{chunk_num - 1}.pt",
+                )
+                chunk += 1
+                all_reps = []
+
+            pbar.update(len(batch_inputs))
+
+    if len(all_reps) > 0:
+        rna_reps = torch.cat(all_reps, dim=0)
+        del all_reps
+        gc.collect()
+        torch.save(
+            rna_reps,
+            f"./datasets/{args.dataset}/{save_name}_RNABERT_{chunk}-{chunk_num - 1}.pt",
+        )
+
+    del rna_bert_model
+    gc.collect()
+
+    return load_cache(save_name, "RNABERT")
+
+def run_ernie_rna(rna_ernie_inputs, device, save_name, batch_size=20000):
+    cache_files = glob.glob(f"./datasets/{args.dataset}/{save_name}_Ernie-RNA_*-*.pt")
+    if cache_files:
+        expected_chunks_num = int(os.path.splitext(cache_files[0])[0].split("_")[-1].split("-")[-1]) + 1
+        if expected_chunks_num != len(cache_files):
+            for file in cache_files:
+                print(f"Removing incomplete cache file: {file}")
+                os.remove(file)
+        else:
+            return load_cache(save_name, "Ernie-RNA")
+
+    print(f"Generating {args.dataset} Ernie-RNA {save_name} data...")
+
+    tokenizer = RnaTokenizer.from_pretrained("multimolecule/rnaernie")
+    rna_bert_model = RnaBertModel.from_pretrained("multimolecule/rnaernie").to(device)
+    rna_bert_model.to(device)
+    rna_bert_model.eval()
+
+    all_reps = []
+    batch_per_chunk: int = 50
+    chunk = 0
+    batch_num = (len(rna_ernie_inputs) + batch_size - 1) // batch_size
+    chunk_num = (batch_num + batch_per_chunk - 1) // batch_per_chunk
+    with tqdm(total=len(rna_ernie_inputs), desc="Ernie-RNA") as pbar:
+        for i in range(0, len(rna_ernie_inputs), batch_size):
+            batch_inputs = rna_ernie_inputs[i: i + batch_size]
+
+            input = tokenizer(batch_inputs, return_tensors="pt")
+            input = {k: v.to(device) for k, v in input.items()}
+            with torch.no_grad():
+                encoder_outputs = rna_bert_model(**input)  # output is BaseModelOutput...
+            encoder_hidden_states = encoder_outputs.last_hidden_state
+            encoder_hidden_states = encoder_hidden_states[:, 1:-1, :]
+
+            reps = encoder_hidden_states.reshape(encoder_hidden_states.shape[0], -1)
+            all_reps.append(reps)
+            if len(all_reps) == batch_per_chunk:
+                rna_reps = torch.cat(all_reps, dim=0)
+                del all_reps
+                gc.collect()
+                torch.save(
+                    rna_reps,
+                    f"./datasets/{args.dataset}/{save_name}_Ernie-RNA_{chunk}-{chunk_num - 1}.pt",
+                )
+                chunk += 1
+                all_reps = []
+
+            pbar.update(len(batch_inputs))
+
+    if len(all_reps) > 0:
+        rna_reps = torch.cat(all_reps, dim=0)
+        del all_reps
+        gc.collect()
+        torch.save(
+            rna_reps,
+            f"./datasets/{args.dataset}/{save_name}_Ernie-RNA_{chunk}-{chunk_num - 1}.pt",
+        )
+
+    del rna_bert_model
+    gc.collect()
+
+    return load_cache(save_name, "RNABERT")
+
+
+
 def get_seqs_and_labels(file_path):
     true_seqs = []
     input_seqs = []
@@ -222,9 +415,22 @@ def get_rna_reps(file_path, device):
     elif args.feature == "evo":
         evo_inputs = [line.split()[-1] for line in lines]
         rna_reps = run_evo(evo_inputs, device, fname)
-    elif args.feature == "one-hot":
+    elif args.feature == "evo-2-7b-base":
+        evo_inputs = [line.split()[-1] for line in lines]
+        rna_reps = run_evo_2_7b_base(evo_inputs, device, fname)
+    elif args.feature == "evo-2-7b":
+        evo_inputs = [line.split()[-1] for line in lines]
+        rna_reps = run_evo_2_7b(evo_inputs, device, fname)
+    elif args.feature == "RNABERT":
+        evo_inputs = [line.split()[-1] for line in lines]
+        rna_reps = run_rnabert(evo_inputs, device, fname)
+    elif args.feature == "Ernie-RNA":
+        evo_inputs = [line.split()[-1] for line in lines]
+        rna_reps = run_ernie_rna(evo_inputs, device, fname)
+    elif args.feature == "Evoflow":
         rna_reps = torch.stack([torch.from_numpy(rna_to_onehot(line.split()[-1])) for line in lines]).to(torch.float32)
-
+    else:
+        raise ValueError(f"Unsupported feature type: {args.feature}")
     return rna_reps
 
 
@@ -253,8 +459,6 @@ class MyDataset(Dataset):
 
 
 def train_guidance_LLM(device):
-    n = args.n
-    print(n)
     arch = args.arch
     feature = args.feature
     act_weight = args.act_weight
@@ -264,11 +468,10 @@ def train_guidance_LLM(device):
     train_file = f"./datasets/{dataset}/train.txt"
     test_file = f"./datasets/{dataset}/test.txt"
 
-    input_dim = {"rna-fm": 12800, "evo": 10240, "one-hot": 80}
+    input_dim = {"rna-fm": 12800, "evo": 10240, "RNABERT": 2400, "Ernie-RNA" :15360, "one-hot": 80}
 
     if arch == "base":
-        model = FullModel_guidance_stack(
-            num_layers=n,
+        model = FullModel_guidance(
             input_dim=input_dim[feature],
             model_dim=128,
             tgt_size=5,
@@ -317,7 +520,7 @@ def train_guidance_LLM(device):
         dataset=tr_dataset,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=4,
+        num_workers=8,
         pin_memory=True,
         drop_last=False,
     )
@@ -325,19 +528,21 @@ def train_guidance_LLM(device):
         dataset=te_dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=4,
+        num_workers=8,
         pin_memory=True,
         drop_last=False,
     )
 
     model = model.to(device)
-    # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=0.0006)
+
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=1e-4,
+        # lr = 0.0006,
         weight_decay=0.05,
-        betas=(0.9, 0.999),
-        eps=1e-8,
+        betas=(0.9,0.999),
+        eps=1e-8
     )
     loss_func1 = nn.MSELoss()
     loss_func2 = nn.CrossEntropyLoss(ignore_index=0)
@@ -346,7 +551,7 @@ def train_guidance_LLM(device):
     lowest_loss = float("inf")
     best_epoch = 0
     best_results = ""
-    patience = 20
+    patience = 30
     epochs_no_improvement = 0
     best_weights = model.state_dict()
     model_saved = False
@@ -459,18 +664,16 @@ te_r2 = {(te_r2 / te_b_num):.4f} | te_pearson = {(te_pearson / te_b_num):.4f} | 
             epochs_no_improvement += 1
 
         if epochs_no_improvement >= patience:
-            print(f"Early stop. Best epoch is {best_epoch}.Best results is:")
+            print(f"Early stop. Best epoch is {best_epoch}.Best results is :\n")
             print(best_results)
-            print(model_name)
             torch.save(best_weights, "model/" + model_name)
             model_saved = True
             break
 
     if not model_saved:
-        print(f"Best epoch is {best_epoch}. Best results is:")
+        print(f"Best epoch is {best_epoch}. Best results is :\n")
         print(best_results)
-        print(model_name)
-        torch.save(best_weights, "model/activate_model/" + model_name)
+        torch.save(best_weights, "model/" + model_name)
 
     fw.close()
 
@@ -485,8 +688,8 @@ def main():
     parser.add_argument("--act_weight", type=float, default=0.5)
     parser.add_argument("--model_name", type=str)
     parser.add_argument("--batch_size", type=int, default=5000)
-    parser.add_argument("--k", type=float, default=0.001)
-    parser.add_argument('--n', type=int, default=1)
+    parser.add_argument("--k", type=float, default=0.01)
+
     args = parser.parse_args()
 
     if not args.model_name:
