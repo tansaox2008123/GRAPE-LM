@@ -87,7 +87,6 @@ generation RNA aptamers should follow this code
 * `--cuda <id>`: GPU ID to use (default: `0`)
 * `--arch <str>`: Model architecture (`base`, `gru`, `cnn`, `lstm`)
 * `--feature <str>`: Input feature type (`rna-fm`, `evo`, `one-hot`)
-* `--use_saved_samples`: If set, reuse previously saved samples (`samples/*.txt`) and noises (`samples/*.pt`)
 
 
 
