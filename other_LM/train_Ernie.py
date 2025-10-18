@@ -4,7 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 import torchmetrics
 import time
 import argparse
-from model_zh import *
+from model import *
 from multimolecule import RnaTokenizer, RnaErnieModel
 from torchmetrics.functional import pearson_corrcoef
 import os
@@ -309,3 +309,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
