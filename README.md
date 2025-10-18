@@ -26,10 +26,13 @@ If you have any problem with install evo-model try this code
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-And you can get more details in these websites
+Because of the complexity of the environment these dependencies only support to rna-fm and evo, other LM need to go to their own github to deploy. And you can get more details in these websites
 RNA-FM https://github.com/ml4bio/RNA-FM.
 Evo https://github.com/evo-design/evo
-
+RiNALMo https://github.com/lbcb-sci/RiNALMo
+RNAErnie https://github.com/CatIIIIIIII/RNAErnie
+RNABERT https://github.com/mana438/RNABERT
+Evoflow-RNA https://github.com/AtomBio/evoflow-rna
 ## Quickstart
 Train your own model should follow this code
 ```bash
@@ -87,6 +90,38 @@ generation RNA aptamers should follow this code
 * `--arch <str>`: Model architecture (`base`, `gru`, `cnn`, `lstm`)
 * `--feature <str>`: Input feature type (`rna-fm`, `evo`, `one-hot`)
 
+---
+
+Trian with ohther LLM should follow this code
+
+```base
+
+python generation_other.py 1 --cuda <cuda_id> --train_file <input_file> \
+--test_file <output_file> --model_name <model_name.model> --batch_size <nums>
+
+
+* `train_file`: Input dataset file (e.g., `datasets/mydata/train.txt`)
+* `test_file`: Path to save the generated RNA sequences
+* `batch_size`: Number of sequences to batch_size
+```
+
+---
+
+generation other LLM RNA aptamers should follow this code
+
+```base
+
+python generation_other.py <id> --cuda <cuda_id> --input_file <your_input_file>  \
+--output_file <your_output_file> \
+--model_name <model_name>  --num <gen_num>
+
+* `id`: Which LLM to chose to generation, 1: RNA-BERT, 2: Ernie, 3: RiNALMo
+* `model_name`: Name of the trained model checkpoint (located in `./model/`)
+* `input_file`: Input dataset file (e.g., `datasets/mydata/train.txt`)
+* `output_file`: Path to save the generated RNA sequences
+* `gen_num`: Number of sequences to generate
+
+```
 
 
 The RBD and CD3e original dataset is stored on the following website.
@@ -115,6 +150,40 @@ https://drive.google.com/drive/folders/1cTFhEZJrLScKX-mEqJxUOp_MIEUc9dc1?usp=sha
    year = {2024},
    doi = {10.1126/science.ado9336},
    URL = {https://www.science.org/doi/abs/10.1126/science.ado9336},
+}
+@article{penic2024_rinalmo,
+  title={RiNALMo: General-Purpose RNA Language Models Can Generalize Well on Structure Prediction Tasks},
+  author={Penić, Rafael Josip and Vlašić, Tin and Huber, Roland G. and Wan, Yue and Šikić, Mile},
+  journal={arXiv preprint arXiv:2403.00043},
+  year={2024}
+}
+@Article{Wang2024,
+author={Wang, Ning
+and Bian, Jiang
+and Li, Yuchen
+and Li, Xuhong
+and Mumtaz, Shahid
+and Kong, Linghe
+and Xiong, Haoyi},
+title={Multi-purpose RNA language modelling with motif-aware pretraining and type-guided fine-tuning},
+journal={Nature Machine Intelligence},
+year={2024},
+month={May},
+day={13},
+issn={2522-5839},
+doi={10.1038/s42256-024-00836-4},
+url={https://doi.org/10.1038/s42256-024-00836-4}
+}
+RNA-BERT
+@Article{
+Akiyama, Manato, and Yasubumi Sakakibara.
+"Informative RNA base embedding for RNA structural alignment and clustering by deep representation learning."
+NAR genomics and bioinformatics 4.1 (2022): lqac012.
+}
+Evoflow-RNA
+@Article{
+Patel S, Peng F Z, Fraser K, et al. EvoFlow-RNA: Generating and Representing non-coding RNA
+with a Language Model[J]. bioRxiv, 2025: 2025.02. 25.639942.
 }
 ```
 
