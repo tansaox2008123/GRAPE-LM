@@ -6,7 +6,7 @@ import fm
 import argparse
 from evo import Evo
 import numpy as np
-from model_zh import FullModel_guidance, FullModel_guidance_LSTM, FullModelGru, FullModelCNN
+from model import FullModel_guidance, FullModel_guidance_LSTM, FullModelGru, FullModelCNN
 from tqdm import tqdm
 from pathlib import Path
 
