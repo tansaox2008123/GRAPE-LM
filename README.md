@@ -44,7 +44,6 @@ python train.py <arch> <feature> <dataset> \
 
 * `arch`: Model architecture
   * `base` – Transformer-based model
-  * `gru` – GRU-based model
   * `cnn` – CNN-based model
   * `lstm` – LSTM-based model
 * `feature`: Input representation type
@@ -65,7 +64,7 @@ python train.py <arch> <feature> <dataset> \
 
 generation RNA aptamers should follow this code
 ```bash
-   python generation.py base_rna-fm_mydata_0.001_exp1.model \
+   python generation.py base_rna-fm_RBD.model \
     datasets/mydata/rna_seq.txt \
     outputs/generated.txt \
     0 1000 50 \
