@@ -5,7 +5,7 @@ import argparse
 from multimolecule import RnaTokenizer, RnaBertModel
 from multimolecule import RnaTokenizer, RnaErnieModel
 from multimolecule import RnaTokenizer, RiNALMoModel
-from model_zh import *
+from model import *
 
 from tqdm import tqdm
 from rinalmo.pretrained import get_pretrained_model
@@ -360,3 +360,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
