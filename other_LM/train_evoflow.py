@@ -4,7 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 import torchmetrics
 import time
 import argparse
-from model_zh import *
+from model import *
 from src.ncrna.tasks.lm.drnafm import EvoFlow
 from torchmetrics.functional import pearson_corrcoef
 import copy
@@ -305,3 +305,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
