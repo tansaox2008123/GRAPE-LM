@@ -8,7 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 import torchmetrics
 import time
 import numpy as np
-from model_zh import FullModel_guidance, FullModel_guidance_LSTM, FullModelGru, FullModelCNN
+from model import FullModel_guidance, FullModel_guidance_LSTM, FullModelGru, FullModelCNN
 import fm
 from evo import Evo
 import argparse
