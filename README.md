@@ -159,7 +159,7 @@ RiNALMo
   journal={arXiv preprint arXiv:2403.00043},
   year={2024}
 }
-Ernie
+RNAErnie
 @Article{Wang2024,
 author={Wang, Ning
 and Bian, Jiang
