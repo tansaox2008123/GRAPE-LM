@@ -121,7 +121,7 @@ def generation_Evoflow(input_file, output_file, model_name, num, device):
 
 def main():
     parser = argparse.ArgumentParser(description="Choose which function to run.")
-    parser.add_argument('function', choices=['1', '2', '3', '4', '5', '6', '7', '8'], help="Function to run")
+    parser.add_argument('function', choices=['evoflow'], help="Function to run")
     parser.add_argument('--cuda', type=str, default="0", help="CUDA device ID (e.g., '0', '1', '2')")
     parser.add_argument('--input_file', type=str, help="-----")
     parser.add_argument('--output_file', type=str, help="-----")
@@ -135,7 +135,7 @@ def main():
     model_name = args.model_name
     num = args.num
 
-    if args.function == '1':
+    if args.function == 'evoflow':
         generation_Evoflow(input_file,
                            output_file,
                            model_name,
@@ -145,4 +145,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
