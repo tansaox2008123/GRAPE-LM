@@ -96,7 +96,7 @@ def get_data_RNA_BERT(file_path, is_batch, device):
     return rnas1, input_seqs1, true_seqs1, bd_scores1
 
 
-def train_guidance_RNA_BERT(train_file, test_file, batch_size, model_name, device):
+def train_guidance_RNA_BERT(train_file, test_file, batch_size, model_name, device, weight):
     tr_feats, tr_input_seqs, tr_true_seqs, tr_bd_scores = get_data_RNA_BERT(train_file, is_batch=True, device=device)
     te_feats, te_input_seqs, te_true_seqs, te_bd_scores = get_data_RNA_BERT(test_file, is_batch=True, device=device)
 
@@ -138,7 +138,7 @@ def train_guidance_RNA_BERT(train_file, test_file, batch_size, model_name, devic
         eps=1e-8
     )
 
-    w = 0.50
+    w = weight
     patience = 20
 
     best_temp = float('inf')
@@ -276,12 +276,12 @@ def train_guidance_RNA_BERT(train_file, test_file, batch_size, model_name, devic
 
 def main():
     parser = argparse.ArgumentParser(description="Choose which function to run.")
-    parser.add_argument('function', choices=['1', '2', '3'], help="Function to run")
     parser.add_argument('--cuda', type=str, default="0", help="CUDA device ID (e.g., '0', '1', '2')")
     parser.add_argument('--train_file', type=str)
     parser.add_argument('--test_file', type=str)
     parser.add_argument('--model_name', type=str)
     parser.add_argument('--batch_size', type=int, default="1000")
+    parser.add_argument('--weight', type=int, default="0.5")
 
     args = parser.parse_args()
 
@@ -291,6 +291,7 @@ def main():
     test_file = args.test_file
     batch_size = args.batch_size
     model_name = args.model_name
+    weight = args.weight
 
     os.environ["CUDA_VISIBLE_DEVICES"] = f'{CUDA}'
 
@@ -299,11 +300,11 @@ def main():
     else:
         device = torch.device("cpu")
 
-    if args.function == '1':
-        train_guidance_RNA_BERT(train_file, test_file, batch_size, model_name, device)
+    train_guidance_RNA_BERT(train_file, test_file, batch_size, model_name, device, weight)
 
 
 if __name__ == '__main__':
     main()
+
 
 
