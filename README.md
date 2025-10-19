@@ -107,7 +107,7 @@ python train_rna_bert.py 1 --cuda <cuda_id> --train_file <input_file> \
 
 ---
 
-generation other LLM RNA aptamers should follow this code
+generate other LLM RNA aptamers should follow this code
 
 ```base
 
