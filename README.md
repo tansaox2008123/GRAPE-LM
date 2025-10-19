@@ -33,6 +33,8 @@ RiNALMo https://github.com/lbcb-sci/RiNALMo
 RNAErnie https://github.com/CatIIIIIIII/RNAErnie
 RNABERT https://github.com/mana438/RNABERT
 Evoflow-RNA https://github.com/AtomBio/evoflow-rna
+And RNABERT ,RNAErnie，RiNALMo need to go to https://huggingface.co/multimolecule to deploy
+can running train and generation code
 ## Quickstart
 Train your own model should follow this code
 ```bash
