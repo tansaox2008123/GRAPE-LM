@@ -89,7 +89,7 @@ def get_sample_AE_Evoflow(low, high, num, input_file, device):
 
 
 def generation_Evoflow(input_file, output_file, model_name, num, device):
-    model_name_2 = f'model/zh_generation/{model_name}'
+    model_name_2 = f'model/{model_name}'
 
     model = torch.load(model_name_2)
     model.eval()
@@ -145,3 +145,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
