@@ -313,48 +313,6 @@ class FullModel_guidance_stack(nn.Module):
 
         return bind_scores, pred_seq
 
-
-class FullModelGru(nn.Module):
-    def __init__(self, input_dim, model_dim, vocab_size, num_gru_layers, dropout):
-        super().__init__()
-
-        self.adapter = Adapter_layernorm(embed_dim=input_dim, model_dim=model_dim, dropout=dropout)
-
-        self.predictor = Predictor(hidd_feat_dim=int(model_dim * 20), model_dim=model_dim, dropout=dropout)
-
-        self.embed = nn.Embedding(vocab_size, model_dim)
-
-        self.gru = nn.GRU(
-            input_size=model_dim,
-            hidden_size=model_dim,
-            num_layers=num_gru_layers,
-            batch_first=True,
-            dropout=dropout if num_gru_layers > 1 else 0,
-        )
-
-        self.generator = Generator(model_dim, vocab=vocab_size)
-
-    def init_hidden(self, batch_size, device=None):
-        if device is None:
-            device = next(self.parameters()).device
-        return torch.zeros(self.gru.num_layers, batch_size, self.gru.hidden_size, device=device)
-
-    def forward(self, seq_rep, seq):
-        hidd_feats = self.adapter(seq_rep)
-
-        flat_feats = hidd_feats.reshape(hidd_feats.size(0), -1)
-        bind_scores = self.predictor(flat_feats)
-
-        hidden = self.init_hidden(seq_rep.size(0), seq_rep.device)
-        _, hidden = self.gru(hidd_feats, hidden)
-        x = self.embed(seq)
-        x, _ = self.gru(x, hidden)
-
-        pred_seq = self.generator(x)
-
-        return bind_scores, pred_seq
-
-
 class FullModelCNN(nn.Module):
     """
     No LLM
