@@ -150,12 +150,14 @@ https://drive.google.com/drive/folders/1cTFhEZJrLScKX-mEqJxUOp_MIEUc9dc1?usp=sha
    doi = {10.1126/science.ado9336},
    URL = {https://www.science.org/doi/abs/10.1126/science.ado9336},
 }
+RiNALMo
 @article{penic2024_rinalmo,
   title={RiNALMo: General-Purpose RNA Language Models Can Generalize Well on Structure Prediction Tasks},
   author={Penić, Rafael Josip and Vlašić, Tin and Huber, Roland G. and Wan, Yue and Šikić, Mile},
   journal={arXiv preprint arXiv:2403.00043},
   year={2024}
 }
+Ernie
 @Article{Wang2024,
 author={Wang, Ning
 and Bian, Jiang
