@@ -54,8 +54,8 @@ def read_data_ernie(file_path, model, tokenizer, device):
 
         decimal_part_cluster = float(words[0])
         decimal_part_self = float(words[1])
-        decimal_part = ((sigmoid(decimal_part_cluster, 0.001) - 0.5) * 2.0 * 0.95 +
-                        (sigmoid(decimal_part_self, 0.001) - 0.5) * 2.0 * 0.05)
+        decimal_part = ((sigmoid(decimal_part_cluster, pearson_k) - 0.5) * 2.0 * 0.95 +
+                        (sigmoid(decimal_part_self, pearson_k) - 0.5) * 2.0 * 0.05)
 
         sequence = b
 
@@ -283,6 +283,7 @@ def main():
     parser.add_argument('--model_name', type=str)
     parser.add_argument('--batch_size', type=int, default="1000")
     parser.add_argument('--weight', type=int, default="0.5")
+    parser.add_argument('--k', type=int, default="0.001")
 
     args = parser.parse_args()
 
@@ -292,6 +293,9 @@ def main():
     batch_size = args.batch_size
     model_name = args.model_name
     weight = args.weight
+
+    global pearson_k
+    pearson_k = args.k
 
     os.environ["CUDA_VISIBLE_DEVICES"] = f'{CUDA}'
 
@@ -305,6 +309,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 
