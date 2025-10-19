@@ -274,9 +274,9 @@ def train_guidance_RNA_BERT(train_file, test_file, batch_size, model_name, devic
         torch.save(model, f'model/{model_name}_latest.model')
 
 
+
 def main():
     parser = argparse.ArgumentParser(description="Choose which function to run.")
-    parser.add_argument('function', choices=['rna-bert', '2', '3'], help="Function to run")
     parser.add_argument('--cuda', type=str, default="0", help="CUDA device ID (e.g., '0', '1', '2')")
     parser.add_argument('--train_file', type=str)
     parser.add_argument('--test_file', type=str)
@@ -300,8 +300,7 @@ def main():
     else:
         device = torch.device("cpu")
 
-    if args.function == 'rna-bert':
-        train_guidance_RNA_BERT(train_file, test_file, batch_size, model_name, device, weight)
+    train_guidance_RNA_BERT(train_file, test_file, batch_size, model_name, device, weight)
 
 
 if __name__ == '__main__':
