@@ -87,7 +87,7 @@ generation RNA aptamers should follow this code
 **Options:**
 
 * `--cuda <id>`: GPU ID to use (default: `0`)
-* `--arch <str>`: Model architecture (`base`, `gru`, `cnn`, `lstm`)
+* `--arch <str>`: Model architecture (`base`,  `cnn`, `lstm`)
 * `--feature <str>`: Input feature type (`rna-fm`, `evo`, `one-hot`)
 
 ---
@@ -124,7 +124,7 @@ python generation_other.py <id> --cuda <cuda_id> --input_file <your_input_file> 
 ```
 
 
-The RBD and CD3e original dataset and other LLM training model are stored on the following website.
+The RBD and CD3ε original dataset and other LLM training model are stored on the following website.
 
 ```bash
 https://drive.google.com/drive/folders/1cTFhEZJrLScKX-mEqJxUOp_MIEUc9dc1?usp=sharing
