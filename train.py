@@ -16,7 +16,6 @@ from torchmetrics.regression import R2Score
 from torchmetrics.functional import pearson_corrcoef
 from tqdm import tqdm
 import glob
-from multimolecule import RnaTokenizer, RnaBertModel
 
 def sigmoid(x, k):
     return 1 / (1 + np.exp(-k * x))
