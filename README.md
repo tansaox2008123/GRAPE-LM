@@ -124,7 +124,8 @@ python generation_other.py <id> --cuda <cuda_id> --input_file <your_input_file> 
 ```
 
 
-The RBD and CD3e original dataset is stored on the following website.
+The RBD and CD3e original dataset and other LLM training model are stored on the following website.
+
 ```bash
 https://drive.google.com/drive/folders/1cTFhEZJrLScKX-mEqJxUOp_MIEUc9dc1?usp=sharing
 ```
