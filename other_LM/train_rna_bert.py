@@ -282,8 +282,8 @@ def main():
     parser.add_argument('--test_file', type=str)
     parser.add_argument('--model_name', type=str)
     parser.add_argument('--batch_size', type=int, default="1000")
-    parser.add_argument('--weight', type=int, default="0.5")
-    parser.add_argument('--k', type=int, default="0.001")
+    parser.add_argument('--weight', type=float, default="0.5")
+    parser.add_argument('--k', type=float, default="0.001")
 
     args = parser.parse_args()
 
@@ -309,6 +309,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 
