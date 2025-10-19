@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import os
 import random
@@ -6,7 +7,7 @@ import fm
 import argparse
 from evo import Evo
 import numpy as np
-from model import FullModel_guidance, FullModel_guidance_LSTM, FullModelGru, FullModelCNN
+from model import FullModel_guidance, FullModel_guidance_LSTM, FullModelCNN
 from tqdm import tqdm
 from pathlib import Path
 
@@ -46,32 +47,6 @@ def greedy_decode_guidance(model, input_src, max_len, start_symbol, is_noise, no
         ys = torch.cat([ys, torch.ones(1, 1).type_as(input_src.data).fill_(next_word)], dim=1).long()
 
     return ys
-
-
-# GRU verison
-def gru_predict_sequence(model, input_seq, max_len, start_symbol, is_noise, noise, device):
-    if is_noise:
-        input_seq += noise
-
-    h = model.adapter(input_seq)
-    _, hidden = model.gru(
-        h,
-        torch.zeros(model.gru.num_layers, 1, model.gru.hidden_size, device=device),
-    )
-
-    current = torch.empty(1, 1).fill_(start_symbol).long().to(device)
-
-    generated_ids = []
-    for i in range(max_len):
-        current = model.embed(current)
-        gru_out, hidden = model.gru(current, hidden)
-        pred = model.generator(gru_out)  # [1, 1, vocab_size]
-        pred = torch.softmax(pred, -1)
-        next_token = torch.argmax(pred, -1)  # [1, 1]
-        generated_ids.append(next_token.item())
-        current = next_token
-
-    return generated_ids
 
 
 def gaussian_noise(size, mean=0.0, std=1.0):
@@ -224,14 +199,6 @@ def generation(
             n_heads=2,
             dropout=0.05,
         )
-    elif arch == "gru":
-        model = FullModelGru(
-            input_dim=input_dim[feature] // 20,
-            model_dim=128,
-            vocab_size=5,
-            num_gru_layers=2,
-            dropout=0.05,
-        )
     elif arch == "cnn":
         model = FullModelCNN(
             input_dim=4,
@@ -281,11 +248,8 @@ def generation(
     for sample, noise in tqdm(zip(samples, noises), total=len(samples), desc="Generating sequences"):
         sample = sample.unsqueeze(0).to(device)
         noise = noise.unsqueeze(0).to(device)
-        if arch == "gru":
-            generated_seq = gru_predict_sequence(model, sample, 20, 0, True, noise, device)
-        else:
-            generated_seq = greedy_decode_guidance(model, sample, 20, 0, True, noise, device)
-            generated_seq = generated_seq.squeeze().tolist()
+        generated_seq = greedy_decode_guidance(model, sample, 20, 0, True, noise, device)
+        generated_seq = generated_seq.squeeze().tolist()
 
         id_to_base = {1: "A", 2: "C", 3: "G", 4: "U"}
 
