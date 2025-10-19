@@ -38,8 +38,8 @@ def read_data_evoflow(file_path, model, tokenizer, device):
 
         decimal_part_cluster = float(words[0])
         decimal_part_self = float(words[1])
-        decimal_part = ((sigmoid(decimal_part_cluster, 0.001) - 0.5) * 2.0 * 0.95 +
-                        (sigmoid(decimal_part_self, 0.001) - 0.5) * 2.0 * 0.05)
+        decimal_part = ((sigmoid(decimal_part_cluster, pearson_k) - 0.5) * 2.0 * 0.95 +
+                        (sigmoid(decimal_part_self, pearson_k) - 0.5) * 2.0 * 0.05)
 
 
         embedding = torch.tensor(tokenizer.batch_tokenize(b_list), dtype=torch.int64, device=f'cuda:{device}')
@@ -290,6 +290,7 @@ def main():
     parser.add_argument('--model_name', type=str)
     parser.add_argument('--batch_size', type=int, default="1000")
     parser.add_argument('--weight', type=int, default="0.5")
+    parser.add_argument('--k', type=int, default="0.001")
 
     args = parser.parse_args()
 
@@ -300,10 +301,14 @@ def main():
     model_name = args.model_name
     weight = args.weight
 
+    global pearson_k
+    pearson_k = args.k
+
     train_guidance_LLM_Evoflow(train_file, test_file, batch_size, model_name, CUDA, weight)
 
 
 if __name__ == '__main__':
     main()
+
 
 
