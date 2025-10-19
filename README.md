@@ -15,7 +15,7 @@ Python: 3.8.18
 System: Ubuntu 22.04.4
 
 ```bash
-   git clone https://github.com/tansaox2008123/Grape.git
+   git clone https://github.com/tansaox2008123/GRAPE-LM.git
    pip install torch==2.0.1
    pip install flash-attn==2.5.6
    pip install -r requirements.txt
@@ -40,7 +40,6 @@ python train.py <arch> <feature> <dataset> \
     --cuda 0 \
     --act_weight 0.5 \
     --model_name myrun \
-    --n 2
 ```
 
 **Arguments:**
@@ -61,7 +60,6 @@ python train.py <arch> <feature> <dataset> \
 * `--act_weight <float>`: Weight of activity loss relative to sequence loss
 * `--model_name <str>`: Name of the model checkpoint to save under `./model/`
 * `--batch_size <int>`: Training batch size
-* `--n <int>`: Number of layers (only used for `base` architecture)
 
 ---
 
