@@ -52,8 +52,8 @@ def read_data_ernie(file_path, model, tokenizer, device):
         input_seq = values_list[:-1]
         true_seq = values_list[1:]
 
-        decimal_part_cluster = float(words[0]) * 0.95
-        decimal_part_self = float(words[1]) * 0.05
+        decimal_part_cluster = float(words[0])
+        decimal_part_self = float(words[1])
         decimal_part = ((sigmoid(decimal_part_cluster, 0.001) - 0.5) * 2.0 * 0.95 +
                         (sigmoid(decimal_part_self, 0.001) - 0.5) * 2.0 * 0.05)
 
@@ -305,4 +305,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
