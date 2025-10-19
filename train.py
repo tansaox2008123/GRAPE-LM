@@ -53,7 +53,7 @@ def get_act_score(cluster_reads, seq_reads):
     cluster_socre = (sigmoid(cluster_reads, k) - 0.5) * 2.0
     seq_socre = (sigmoid(seq_reads, k) - 0.5) * 2.0
 
-    return (cluster_socre + seq_socre) / 2
+    return cluster_socre * 0.95 + seq_socre * 0.05
 
 
 def load_cache(save_name, method):
