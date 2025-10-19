@@ -9,6 +9,7 @@ import torchmetrics
 import time
 import numpy as np
 from model import FullModel_guidance, FullModel_guidance_LSTM, FullModelCNN
+from model import FullModelCNN as FullModel_guidance_CNN
 import fm
 from evo import Evo
 import argparse
@@ -272,7 +273,7 @@ def train_guidance_LLM(device):
             dropout=0.05,
         )
     elif arch == "cnn":
-        model = FullModelCNN(
+        model = FullModel_guidance_CNN(
             input_dim=4,
             model_dim=128,
             tgt_size=5,
