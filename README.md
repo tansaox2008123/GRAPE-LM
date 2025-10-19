@@ -100,12 +100,13 @@ Train with other LLM should follow this code
 python train_rna_bert.py 1 --cuda <cuda_id> --train_file <input_file> \
 --test_file <output_file> --model_name <model_name.model> --batch_size <nums>
 
+```
 
+**Arguments:**
 * `train_file`: Input dataset file (e.g., `datasets/mydata/train.txt`)
 * `test_file`: Path to save the generated RNA sequences
 * `batch_size`: Number of sequences to batch_size
 * `--k <int>`: The regulatory factor for pseudo activity calculation needs to be optimized based on different target data. For RBD, 0.001 is recommended, while for CD3ε and c-Myc, 0.01 is recommended.
-```
 
 ---
 
@@ -117,14 +118,14 @@ python generation_other.py <id> --cuda <cuda_id> --input_file <your_input_file> 
 --output_file <your_output_file> \
 --model_name <model_name>  --num <gen_num>
 
+```
+
+**Arguments:**
 * `id`: Which LLM to chose to generation, 1: RNA-BERT, 2: Ernie, 3: RiNALMo
 * `model_name`: Name of the trained model checkpoint (located in `./model/`)
 * `input_file`: Input dataset file (e.g., `datasets/mydata/train.txt`)
 * `output_file`: Path to save the generated RNA sequences
 * `gen_num`: Number of sequences to generate
-
-```
-
 
 The original datasets and other LLM training model are stored on the following website.
 
