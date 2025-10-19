@@ -96,7 +96,7 @@ Train with other LLM should follow this code
 
 ```base
 
-python generation_other.py 1 --cuda <cuda_id> --train_file <input_file> \
+python train_rna_bert.py 1 --cuda <cuda_id> --train_file <input_file> \
 --test_file <output_file> --model_name <model_name.model> --batch_size <nums>
 
 
