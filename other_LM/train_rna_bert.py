@@ -282,6 +282,7 @@ def main():
     parser.add_argument('--test_file', type=str)
     parser.add_argument('--model_name', type=str)
     parser.add_argument('--batch_size', type=int, default="1000")
+    parser.add_argument('--weight', type=int, default="0.5")
 
     args = parser.parse_args()
 
@@ -290,6 +291,7 @@ def main():
     test_file = args.test_file
     batch_size = args.batch_size
     model_name = args.model_name
+    weight = args.weight
 
     os.environ["CUDA_VISIBLE_DEVICES"] = f'{CUDA}'
 
@@ -299,10 +301,11 @@ def main():
         device = torch.device("cpu")
 
     if args.function == '1':
-        train_guidance_RNA_BERT(train_file, test_file, batch_size, model_name, device)
+        train_guidance_RNA_BERT(train_file, test_file, batch_size, model_name, device, weight)
 
 
 if __name__ == '__main__':
     main()
+
 
 
