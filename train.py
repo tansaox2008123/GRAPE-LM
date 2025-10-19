@@ -259,7 +259,7 @@ def train_guidance_LLM(device):
     train_file = f"./datasets/{dataset}/train.txt"
     test_file = f"./datasets/{dataset}/test.txt"
 
-    input_dim = {"rna-fm": 12800, "evo": 10240, "RNABERT": 2400, "Ernie-RNA" :15360, "one-hot": 80}
+    input_dim = {"rna-fm": 12800, "evo": 10240, "one-hot": 80}
 
     if arch == "base":
         model = FullModel_guidance(
@@ -345,7 +345,6 @@ def train_guidance_LLM(device):
         tr_loss2_value = 0.0
         tr_acc = 0.0
         tr_b_num = 0.0
-        tr_r2 = 0.0
         tr_pearson = 0.0
         model.train()
 
@@ -375,7 +374,7 @@ def train_guidance_LLM(device):
             )
 
             loss = act_weight * loss1 + (1.0 - act_weight) * loss2
-            tr_r2 += r2score(bind_socres, labels)
+            # tr_r2 += r2score(bind_socres, labels)
             tr_pearson += pearson_corrcoef(bind_socres, labels)
             tr_loss1_value += loss1.item()
             tr_loss2_value += loss2.item()
@@ -388,7 +387,6 @@ def train_guidance_LLM(device):
         te_loss2_value = 0.0
 
         te_acc = 0.0
-        te_r2 = 0.0
         te_pearson = 0.0
         te_b_num = 0.0
 
@@ -421,7 +419,7 @@ def train_guidance_LLM(device):
                     ignore_index=0,
                     average="micro",
                 )
-                te_r2 += r2score(bind_socres, labels)
+                # te_r2 += r2score(bind_socres, labels)
                 te_pearson += pearson_corrcoef(bind_socres, labels)
 
                 te_loss1_value += loss1.item()
@@ -429,10 +427,10 @@ def train_guidance_LLM(device):
                 te_b_num += 1.0
 
         end_t = time.time()
-        results = f"Epoch: {epoch} | tr_loss1 = {(tr_loss1_value / tr_b_num):.4f} | tr_loss2 = {(tr_loss2_value / tr_b_num):.4f} | tr_r2 = {(tr_r2 / tr_b_num):.4f} | \
+        results = f"Epoch: {epoch} | tr_loss1 = {(tr_loss1_value / tr_b_num):.4f} | tr_loss2 = {(tr_loss2_value / tr_b_num):.4f} | \
 tr_pearson={(tr_pearson / tr_b_num):.4f} | tr_acc = {(tr_acc / tr_b_num):.4f} | \
 te_loss1 = {(te_loss1_value / te_b_num):.4f} | te_loss2 = {(te_loss2_value / te_b_num):.4f} | \
-te_r2 = {(te_r2 / te_b_num):.4f} | te_pearson = {(te_pearson / te_b_num):.4f} | te_acc = {(te_acc / te_b_num):.4f} | time = {(end_t - start_t):.2f}"
+te_pearson = {(te_pearson / te_b_num):.4f} | te_acc = {(te_acc / te_b_num):.4f} | time = {(end_t - start_t):.2f}"
         fw.write(results + "\n")
         print(results)
 
