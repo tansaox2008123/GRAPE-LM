@@ -62,6 +62,7 @@ python train.py <arch> <feature> <dataset> \
 * `--act_weight <float>`: Weight of activity loss relative to sequence loss
 * `--model_name <str>`: Name of the model checkpoint to save under `./model/`
 * `--batch_size <int>`: Training batch size
+* `--k <int>`: The regulatory factor for pseudo activity calculation needs to be optimized based on different target data. For RBD, 0.001 is recommended, while for CD3ε and c-Myc, 0.01 is recommended.
 
 ---
 
@@ -103,6 +104,7 @@ python train_rna_bert.py 1 --cuda <cuda_id> --train_file <input_file> \
 * `train_file`: Input dataset file (e.g., `datasets/mydata/train.txt`)
 * `test_file`: Path to save the generated RNA sequences
 * `batch_size`: Number of sequences to batch_size
+* `--k <int>`: The regulatory factor for pseudo activity calculation needs to be optimized based on different target data. For RBD, 0.001 is recommended, while for CD3ε and c-Myc, 0.01 is recommended.
 ```
 
 ---
