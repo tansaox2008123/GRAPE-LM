@@ -69,7 +69,7 @@ generation RNA aptamers should follow this code
 ```bash
    python generation.py base_rna-fm_RBD.model \
     datasets/mydata/rna_seq.txt \
-    outputs/generated.txt \
+    generated.txt \
     0 1000 50 \
     --cuda 0
 
