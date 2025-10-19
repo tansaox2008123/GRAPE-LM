@@ -313,7 +313,7 @@ class FullModel_guidance_stack(nn.Module):
 
         return bind_scores, pred_seq
 
-class FullModelCNN(nn.Module):
+class FullModel_guidance_CNN(nn.Module):
     """
     No LLM
     feats: one-hot
@@ -321,7 +321,7 @@ class FullModelCNN(nn.Module):
     """
 
     def __init__(self, input_dim, model_dim, tgt_size, n_declayers, d_ff, d_k_v, n_heads, dropout):
-        super(FullModelCNN, self).__init__()
+        super(FullModel_guidance_CNN, self).__init__()
 
         self.cnn = nn.Sequential(
             nn.Conv1d(input_dim, model_dim, kernel_size=3, stride=1, padding=1),
