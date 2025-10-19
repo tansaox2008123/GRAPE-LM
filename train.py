@@ -467,7 +467,7 @@ def main():
     parser.add_argument("--act_weight", type=float, default=0.5)
     parser.add_argument("--model_name", type=str)
     parser.add_argument("--batch_size", type=int, default=5000)
-    parser.add_argument("--k", type=float, default=0.01)
+    parser.add_argument("--k", type=float, default=0.001)
 
     args = parser.parse_args()
 
