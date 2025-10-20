@@ -108,7 +108,7 @@ Train with other language models should follow this code
 
 ```base
 
-python train_rna_bert.py 1 --cuda <cuda_id> --train_file <input_file> \
+python train_rna_bert.py rna-bert --cuda <cuda_id> --train_file <input_file> \
 --test_file <output_file> --model_name <model_name.model> --batch_size <nums>
 
 ```
@@ -118,7 +118,7 @@ python train_rna_bert.py 1 --cuda <cuda_id> --train_file <input_file> \
 * `test_file`: Path to save the generated RNA sequences
 * `batch_size`: Number of sequences to batch_size
 * `--k <float>`: The regulatory factor for pseudo activity calculation needs to be optimized based on different target data. For RBD, 0.001 is recommended, while for CD3ε and c-Myc, 0.01 is recommended.
-
+* `--weight <float>`: Weight of activity loss relative to sequence loss. For RBD, 0.85 is recommended, while for CD3ε and c-Myc, 0.5 is recommended.
 ---
 
 Generate RNA aptamers with other language models should follow this code
@@ -195,7 +195,7 @@ RNA-BERT
 Evoflow-RNA
 @Article{
   author={Patel S, Peng F Z, Fraser K, et al.},
-  journal={EvoFlow-RNA: Generating and Representing non-coding RNA with a Language Model},
+  title={EvoFlow-RNA: Generating and Representing non-coding RNA with a Language Model},
   journal={bioRxiv},
   year={2025}
 }
