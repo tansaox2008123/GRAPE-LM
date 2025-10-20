@@ -7,7 +7,7 @@ import fm
 import argparse
 from evo import Evo
 import numpy as np
-from model import FullModel_guidance, FullModel_guidance_LSTM, FullModelCNN
+from model import FullModel_guidance, FullModel_guidance_LSTM, FullModel_guidance_CNN
 from tqdm import tqdm
 from pathlib import Path
 
@@ -200,7 +200,7 @@ def generation(
             dropout=0.05,
         )
     elif arch == "cnn":
-        model = FullModelCNN(
+        model = FullModel_guidance_CNN(
             input_dim=4,
             model_dim=128,
             tgt_size=5,
