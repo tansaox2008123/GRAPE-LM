@@ -35,7 +35,7 @@ If you have any problem with install evo-model try this code
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-Because of the complexity of the environment these dependencies only support to rna-fm and evo, other LM need to go to 
+Because of the complexity of the environment these dependencies only support to rna-fm and evo, other LMs need to go to 
 their own github to deploy. And you can get more details in these websites：
 RNA-FM https://github.com/ml4bio/RNA-FM;
 Evo https://github.com/evo-design/evo;
@@ -43,8 +43,7 @@ RiNALMo https://github.com/lbcb-sci/RiNALMo;
 RNAErnie https://github.com/CatIIIIIIII/RNAErnie;
 RNABERT https://github.com/mana438/RNABERT;
 Evoflow-RNA https://github.com/AtomBio/evoflow-rna.
-RNABERT, RNAErnie, RiNALMo need to deploy
-to run train and generation code in https://huggingface.co/multimolecule.
+RNABERT, RNAErnie, RiNALMo need to deploy multimolecule (https://huggingface.co/multimolecule) to run the training and generation code.
 
 ## Quickstart
 Train your own model should follow this code
@@ -52,7 +51,14 @@ Train your own model should follow this code
 python train.py <arch> <feature> <dataset> \
     --cuda 0 \
     --act_weight 0.5 \
-    --model_name myrun \
+    --model_name mymodel \
+    --batch_size 5000 \
+    --k 0.001
+```
+
+For example
+```bash
+   python train.py base rna-fm RBD --cuda 0 --act_weight 0.5 --model_name RBD_test_model --batch_size 5000 --k 0.001
 ```
 
 **Arguments:**
@@ -62,7 +68,7 @@ python train.py <arch> <feature> <dataset> \
   * `cnn` – CNN-based model
   * `lstm` – LSTM-based model
 * `feature`: Input representation type
-  * `rna-fm` – RNA foundation mmodel embeddings
+  * `rna-fm` – RNA foundation model embeddings
   * `evo` – Genomic model embeddings
   * `one-hot` – One-hot encoding of RNA sequences
 * `dataset`: Dataset name (folder under `datasets/`)
@@ -72,35 +78,36 @@ python train.py <arch> <feature> <dataset> \
 * `--cuda <id>`: GPU ID to use (default: `0`)
 * `--act_weight <float>`: Weight of activity loss relative to sequence loss. For RBD, 0.85 is recommended, while for CD3ε and c-Myc, 0.5 is recommended.
 * `--model_name <str>`: Name of the model checkpoint to save under `./model/`
-* `--batch_size <int>`: Training batch size
+* `--batch_size <int>`: Training batch size (default: `5000`)
 * `--k <float>`: The regulatory factor for pseudo activity calculation needs to be optimized based on different target data. For RBD, 0.001 is recommended, while for CD3ε and c-Myc, 0.01 is recommended.
 
 ---
 
 Generate RNA aptamers should follow this code
 ```bash
-   python generation.py base_rna-fm_RBD.model \
-    rna_seq.txt \
-    generated.txt \
-    0 1000 50 \
-    --cuda 0
+   python generation.py <model> <input_file> <output_file> <low> <high> <gen_num> --cuda 0
 
 ```
 
+For example
+```bash
+   python generation.py base_rna-fm_RBD.model datasets/RBD/train.txt generated_sequences.txt 0 1000 50 --cuda 0 
+```
+
+
 **Arguments:**
 
-* `model_name`: Name of the trained model checkpoint (located in `./model/`)
-* `input_file`: Input dataset file (e.g., `datasets/mydata/train.txt`)
-* `output_file`: Path to save the generated RNA sequences
-* `low`: Lower bound index for sampling sequences from the input file
-* `high`: Upper bound index for sampling sequences
-* `gen_num`: Number of sequences to generate
+* `model <str>`: Name of the trained model checkpoint (located in `./model/`, e.g., `base_rna-fm_RBD.model`)
+* `input_file <str>`: Input seed file (e.g., `datasets/mydata/train.txt`)
+* `output_file <str>`: Path to save the generated RNA sequences (e.g., `generated_sequences.txt`)
+* `low <int>`: Lower bound index for sampling sequences from the seed file (e.g., `0`)
+* `high <int>`: Upper bound index for sampling sequences  (e.g., `1000`)
+* `gen_num <int>`: Number of sequences to generate (e.g., `50`)
 
 **Options:**
 
 * `--cuda <id>`: GPU ID to use (default: `0`)
-* `--arch <str>`: Model architecture (`base`,  `cnn`, `lstm`)
-* `--feature <str>`: Input feature type (`rna-fm`, `evo`, `one-hot`)
+
 
 ---
 
@@ -108,82 +115,89 @@ Train with other language models should follow this code
 
 ```base
 
-python train_rna_bert.py rna-bert --cuda <cuda_id> --train_file <input_file> \
---test_file <output_file> --model_name <model_name.model> --batch_size <nums>
+python train_<LM name>.py --cuda <cuda_id> --train_file <train_file> \
+--test_file <test_file> --model_name <model_name> --batch_size <number> \
+--weight <weight> --k <k>
+
+```
+
+For example
+```base
+
+python train_rna_bert.py --cuda 0 --train_file datasets/RBD/train.txt \
+--test_file datasets/RBD/test.txt --model_name test_RBD_rna_bert --batch_size 1000 \
+--weight 0.5 --k 0.001
 
 ```
 
 **Arguments:**
-* `train_file`: Input dataset file (e.g., `datasets/mydata/train.txt`)
-* `test_file`: Path to save the generated RNA sequences
-* `batch_size`: Number of sequences to batch_size
-* `--k <float>`: The regulatory factor for pseudo activity calculation needs to be optimized based on different target data. For RBD, 0.001 is recommended, while for CD3ε and c-Myc, 0.01 is recommended.
+* `--train_file <str>`: Training dataset file (e.g., `datasets/RBD/train.txt`)
+* `--test_file <str>`: Test dataset file (e.g., `datasets/RBD/test.txt`)
+* `--model_name <str>`: Name of the stored training model (e.g., `test_RBD_rna_bert`)
+* `--batch_size <int>`: Number of sequences to batch_size (default: `1000`)
 * `--weight <float>`: Weight of activity loss relative to sequence loss. For RBD, 0.85 is recommended, while for CD3ε and c-Myc, 0.5 is recommended.
+* `--k <float>`: The regulatory factor for pseudo activity calculation needs to be optimized based on different target data. For RBD, 0.001 is recommended, while for CD3ε and c-Myc, 0.01 is recommended.
 ---
 
 Generate RNA aptamers with other language models should follow this code
 
 ```base
 
-python generation_other.py <id> --cuda <cuda_id> --input_file <your_input_file>  \
---output_file <your_output_file> \
---model_name <model_name>  --num <gen_num>
+python generation_other.py <function> --model_name <model_name> \
+--cuda <cuda_id> --input_file <your_input_file> \
+--output_file <your_output_file> --num <gen_num>
+
+```
+For example
+```base
+
+python generation_other.py rna-bert --model_name base_rna-bert_RBD.model \
+--cuda 0 --input_file datasets/RBD/train.txt \
+--output_file generated_sequences.txt --num 50
 
 ```
 
 **Arguments:**
-* `id`: Which language model to chose to generation (e.g. rna-bert, rna-ernie, rinalmo) 
-* `model_name`: Name of the trained model checkpoint (located in `./model/`)
-* `input_file`: Input dataset file (e.g., `datasets/mydata/train.txt`)
-* `output_file`: Path to save the generated RNA sequences
-* `gen_num`: Number of sequences to generate
+* `function <str>`: Which language model to chose to generation (e.g. `rna-bert`, `rna-ernie`, `rinalmo`) 
+* `model_name <str>`: Name of the trained model checkpoint (e.g. `base_rna-bert_RBD.model`)
+* `input_file <str>`: Input seed file (e.g., `datasets/RBD/train.txt`)
+* `output_file <str>`: Path to save the generated RNA sequences (e.g., `generated_sequences.txt`)
+* `gen_num <int>`: Number of sequences to generate  (e.g., `50`)
 
-The original datasets and the models with other language models are stored on the following website:
+The original datasets and the trained checkpoints with other language models are stored on the following website:
 
 ```bash
 https://drive.google.com/drive/folders/1cTFhEZJrLScKX-mEqJxUOp_MIEUc9dc1?usp=sharing
 ```
-## Refernce
+## Refernces
 ```bash
 RNA-FM
 @article{
-  title={Accurate RNA 3D structure prediction using a language model-based deep learning approach},
   author={Shen, Tao and Hu, Zhihang and Sun, Siqi and Liu, Di and Wong, Felix and Wang, Jiuming and Chen, Jiayang and Wang, Yixuan and Hong, Liang and Xiao, Jin and others},
+  title={Accurate RNA 3D structure prediction using a language model-based deep learning approach},
   journal={Nature Methods},
-  pages={1--12},
-  year={2024},
-  publisher={Nature Publishing Group US New York}
+  year={2024}
 }
 Evo
 @article{
    author = {Eric Nguyen and Michael Poli and Matthew G. Durrant and Brian Kang and Dhruva Katrekar and David B. Li and Liam J. Bartie and Armin W. Thomas and Samuel H. King and Garyk Brixi and Jeremy Sullivan and Madelena Y. Ng and Ashley Lewis and Aaron Lou and Stefano Ermon and Stephen A. Baccus and Tina Hernandez-Boussard and Christopher Ré and Patrick D. Hsu and Brian L. Hie },
    title = {Sequence modeling and design from molecular to genome scale with Evo},
    journal = {Science},
-   volume = {386},
-   number = {6723},
-   pages = {eado9336},
-   year = {2024},
-   doi = {10.1126/science.ado9336},
-   URL = {https://www.science.org/doi/abs/10.1126/science.ado9336},
+   year = {2024}
 }
 RiNALMo
 @article{
-  title={RiNALMo: General-Purpose RNA Language Models Can Generalize Well on Structure Prediction Tasks},
   author={Penić, Rafael Josip and Vlašić, Tin and Huber, Roland G. and Wan, Yue and Šikić, Mile},
-  journal={arXiv preprint arXiv:2403.00043},
-  year={2024}
+  title={RiNALMo: General-Purpose RNA Language Models Can Generalize Well on Structure Prediction Tasks},
+  journal={Nature Communications},
+  year={2025}
 }
 RNAErnie
 @Article{
   author={Wang, Ning and Bian, Jiang and Li, Yuchen and Li, Xuhong and Mumtaz, Shahid and Kong, Linghe and Xiong, Haoyi},
   title={Multi-purpose RNA language modelling with motif-aware pretraining and type-guided fine-tuning},
   journal={Nature Machine Intelligence},
-  year={2024},
-  month={May},
-  day={13},
-  issn={2522-5839},
-  doi={10.1038/s42256-024-00836-4},
-  url={https://doi.org/10.1038/s42256-024-00836-4}
+  year={2024}
 }
 RNA-BERT
 @Article{
