@@ -264,12 +264,12 @@ def generation(
 def main():
     global args
     parser = argparse.ArgumentParser(description="Choose which function to run.")
-    parser.add_argument("model_name", type=str)
-    parser.add_argument("input_file", type=str, default="")
-    parser.add_argument("output_file", type=str, help="-----")
+    parser.add_argument("model_name", type=str, help="Name of the trained model checkpoint (located in ./model/, e.g., base_rna-fm_RBD.model)")
+    parser.add_argument("input_file", type=str, default="", help="Input seed file (e.g., datasets/mydata/train.txt)")
+    parser.add_argument("output_file", type=str, help="Path to save the generated RNA sequences (e.g., generated_sequences.txt)")
     parser.add_argument("low", type=int)
     parser.add_argument("high", type=int)
-    parser.add_argument("gen_num", type=int)
+    parser.add_argument("gen_num", type=int, help="Number of sequences to generate (e.g., 50)")
     parser.add_argument("--cuda", type=str, default="0")
     parser.add_argument("--arch", type=str)
     parser.add_argument("--feature", type=str)
