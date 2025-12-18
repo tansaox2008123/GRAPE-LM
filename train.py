@@ -461,13 +461,13 @@ def main():
     global args
     parser = argparse.ArgumentParser(description="Choose which function to run.")
     parser.add_argument("arch", type=str)
-    parser.add_argument("feature", type=str)
+    parser.add_argument("feature", type=str, help="Input representation type")
     parser.add_argument("dataset", type=str)
-    parser.add_argument("--cuda", type=str, default="0")
-    parser.add_argument("--act_weight", type=float, default=0.5)
-    parser.add_argument("--model_name", type=str)
+    parser.add_argument("--cuda", type=str, default="0",help="GPU ID to use (default: 0)")
+    parser.add_argument("--act_weight", type=float, default=0.5, help="Weight of activity loss relative to sequence loss. For RBD, 0.85 is recommended, while for CD3ε and c-Myc, 0.5 is recommended.")
+    parser.add_argument("--model_name", type=str, help="Name of the model checkpoint to save under ./model/")
     parser.add_argument("--batch_size", type=int, default=5000)
-    parser.add_argument("--k", type=float, default=0.001)
+    parser.add_argument("--k", type=float, default=0.001, help="The regulatory factor for pseudo activity calculation needs to be optimized based on different target data. For RBD, 0.001 is recommended, while for CD3ε and c-Myc, 0.01 is recommended.")
 
     args = parser.parse_args()
 
